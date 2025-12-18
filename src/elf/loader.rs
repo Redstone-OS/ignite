@@ -1,11 +1,13 @@
 //! Carregador de segmentos ELF na memória
 
-use crate::elf::ElfParser;
-use crate::error::{BootError, ElfError, Result};
-use crate::memory::MemoryAllocator;
-use crate::types::LoadedKernel;
 use goblin::elf::Elf;
 
+use crate::{
+    elf::ElfParser,
+    error::{BootError, ElfError, Result},
+    memory::MemoryAllocator,
+    types::LoadedKernel,
+};
 
 /// Carregador de ELF
 pub struct ElfLoader<'a> {
@@ -35,36 +37,50 @@ impl<'a> ElfLoader<'a> {
         let kernel_pages = MemoryAllocator::pages_for_size(kernel_size as usize);
 
         log::info!(
-            "Alocando kernel contíguo: Base={:#x} Tam={:#x} ({} páginas)",
+            "Carregando kernel: VAddr={:#x}-{:#x} Tam={:#x} ({} páginas)",
             min_vaddr,
+            max_vaddr,
             kernel_size,
             kernel_pages
         );
 
-        // Alocar memória contígua para todo o kernel
-        let kernel_base_ptr = self
-            .allocator
-            .allocate_at_address(min_vaddr, kernel_pages)?;
+        // IMPORTANTE: Alocar em QUALQUER endereço disponível, não em min_vaddr!
+        // O kernel pode ter min_vaddr = 0x0, que não é válido para alocar.
+        // Vamos alocar onde UEFI permitir e ajustar os offsets.
+        let kernel_base_ptr = self.allocator.allocate_any(kernel_pages)?;
+
+        log::info!(
+            "Kernel alocado em {:#x} (VAddr original era {:#x})",
+            kernel_base_ptr,
+            min_vaddr
+        );
 
         // Zerar memória (BSS e paddings)
         unsafe {
-            self.allocator.zero_memory(kernel_base_ptr, kernel_size as usize);
+            self.allocator
+                .zero_memory(kernel_base_ptr, kernel_size as usize);
         }
 
         // Copiar segmentos
-        self.load_segments(&elf, elf_data)?;
+        self.load_segments(&elf, elf_data, min_vaddr, kernel_base_ptr)?;
 
         log::info!("Kernel carregado com sucesso em {:#x}", kernel_base_ptr);
 
         Ok(LoadedKernel {
             base_address: kernel_base_ptr,
-            size: kernel_size,
-            entry_point: elf.entry,
+            size:         kernel_size,
+            entry_point:  elf.entry,
         })
     }
 
     /// Carrega os segmentos PT_LOAD do ELF na memória
-    fn load_segments(&self, elf: &Elf, elf_data: &[u8]) -> Result<()> {
+    fn load_segments(
+        &self,
+        elf: &Elf,
+        elf_data: &[u8],
+        min_vaddr: u64,
+        physical_base: u64,
+    ) -> Result<()> {
         for ph in &elf.program_headers {
             if ph.p_type == goblin::elf::program_header::PT_LOAD {
                 let mem_size = ph.p_memsz as usize;
@@ -72,14 +88,19 @@ impl<'a> ElfLoader<'a> {
                 let vaddr = ph.p_vaddr;
                 let offset = ph.p_offset as usize;
 
+                // Calcular offset relativo ao base virtual do kernel
+                let segment_offset = (vaddr - min_vaddr) as usize;
+
+                // Endereço físico real = base física + offset
+                let dest_ptr = (physical_base + segment_offset as u64) as *mut u8;
+
                 log::info!(
-                    "Copiando segmento: VAddr={:#x} FileSz={:#x} MemSz={:#x}",
+                    "Segmento: VAddr={:#x} -> PAddr={:#x} FileSz={:#x} MemSz={:#x}",
                     vaddr,
+                    dest_ptr as u64,
                     file_size,
                     mem_size
                 );
-
-                let dest_ptr = vaddr as *mut u8;
 
                 // Copiar conteúdo do arquivo
                 if file_size > 0 {
