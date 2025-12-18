@@ -1,0 +1,23 @@
+# Configuração do Clippy para o projeto Ignite
+
+# Nível de warnings
+warn = ["clippy::all", "clippy::pedantic", "clippy::cargo"]
+
+# Permite alguns lints específicos que são comuns em código de sistema
+allow = [
+    "clippy::missing_errors_doc",       # Documentação de erros pode ser implícita
+    "clippy::missing_panics_doc",       # Panics em bootloader são raros
+    "clippy::module_name_repetitions",  # Comum em módulos de sistema
+    "clippy::cast_possible_truncation", # Necessário para conversões de endereços
+    "clippy::cast_sign_loss",           # Comum em código de baixo nível
+    "clippy::cast_possible_wrap",       # Necessário para ponteiros
+]
+
+# Nega lints críticos
+deny = [
+    "clippy::unwrap_used",   # Preferir expect com mensagem
+    "clippy::expect_used",   # Em produção, usar tratamento adequado
+    "clippy::panic",         # Evitar panics não documentados
+    "clippy::unimplemented", # Código incompleto
+    "clippy::todo",          # TODOs devem ser issues
+]

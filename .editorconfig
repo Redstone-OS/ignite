@@ -1,0 +1,43 @@
+# EditorConfig - Configuração de editor para consistência de código
+# https://editorconfig.org
+
+root = true
+
+# Configurações padrão para todos os arquivos
+[*]
+charset = utf-8
+end_of_line = lf
+insert_final_newline = true
+trim_trailing_whitespace = true
+indent_style = space
+indent_size = 4
+
+# Arquivos Rust
+[*.rs]
+indent_size = 4
+max_line_length = 100
+
+# Arquivos TOML
+[*.toml]
+indent_size = 4
+
+# Arquivos Markdown
+[*.md]
+trim_trailing_whitespace = false
+max_line_length = 120
+
+# Arquivos YAML
+[*.{yml,yaml}]
+indent_size = 2
+
+# Arquivos JSON
+[*.json]
+indent_size = 2
+
+# Makefiles
+[Makefile]
+indent_style = tab
+
+# Scripts shell
+[*.sh]
+indent_size = 2

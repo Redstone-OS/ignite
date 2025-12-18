@@ -1,0 +1,62 @@
+# Configuração do rustfmt para o projeto Ignite
+
+# Edição Rust
+edition = "2024"
+
+# Largura máxima de linha
+max_width = 100
+
+# Tamanho de indentação
+tab_spaces = 4
+
+# Usar espaços em vez de tabs
+hard_tabs = false
+
+# Estilo de chaves
+brace_style = "SameLineWhere"
+
+# Quebra de linha em chains
+chain_width = 60
+
+# Importações
+imports_granularity = "Crate"
+group_imports = "StdExternalCrate"
+reorder_imports = true
+
+# Comentários
+comment_width = 80
+wrap_comments = true
+normalize_comments = true
+
+# Formatação de funções
+fn_args_layout = "Tall"
+fn_single_line = false
+
+# Formatação de structs
+struct_field_align_threshold = 20
+
+# Formatação de match
+match_arm_blocks = true
+match_block_trailing_comma = true
+
+# Uso de trailing commas
+trailing_comma = "Vertical"
+
+# Espaçamento
+space_after_colon = true
+space_before_colon = false
+spaces_around_ranges = false
+
+# Controle de fluxo
+control_brace_style = "AlwaysSameLine"
+
+# Uso de parênteses
+use_field_init_shorthand = true
+use_try_shorthand = true
+
+# Formatação de arrays
+array_width = 60
+
+# Formatação de atributos
+attributes_on_same_line_as_field = false
+attributes_on_same_line_as_variant = false
