@@ -66,10 +66,23 @@ impl<'a> ElfLoader<'a> {
 
         log::info!("Kernel carregado com sucesso em {:#x}", kernel_base_ptr);
 
+        // IMPORTANTE: Ajustar entry point para endereço físico!
+        // O ELF tem entry point virtual (ex: 0x6e40)
+        // Mas o kernel foi carregado em endereço físico (ex: 0x1e043000)
+        // Entry point real = base física + (entry virtual - base virtual)
+        let entry_offset = elf.entry - min_vaddr;
+        let physical_entry = kernel_base_ptr + entry_offset;
+
+        log::info!(
+            "Entry point: Virtual={:#x} -> Físico={:#x}",
+            elf.entry,
+            physical_entry
+        );
+
         Ok(LoadedKernel {
             base_address: kernel_base_ptr,
             size:         kernel_size,
-            entry_point:  elf.entry,
+            entry_point:  physical_entry, // Usar entry point físico!
         })
     }
 

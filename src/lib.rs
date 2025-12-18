@@ -275,8 +275,29 @@ pub fn boot(image_handle: Handle, mut system_table: SystemTable<Boot>) -> ! {
     // resetar contador de tentativas em próximo boot
     let (_rt, _map) = system_table.exit_boot_services(MemoryType::LOADER_DATA);
 
-    // 11. Saltar para o kernel
-    jump_to_kernel(loaded_kernel.entry_point, args);
+    // 11. Saltar para o kernel usando função naked
+    // IMPORTANTE: Inline assembly não funciona, usar naked function
+    unsafe {
+        jump_to_kernel_naked(loaded_kernel.entry_point, 0x8000);
+    }
+}
+
+/// Função naked para saltar para o kernel
+///
+/// IMPORTANTE: Esta função usa naked para garantir que o assembly
+/// seja exatamente como escrevemos, sem prólogo/epílogo do compilador
+#[unsafe(naked)]
+extern "C" fn jump_to_kernel_naked(entry: u64, boot_info: u64) -> ! {
+    unsafe {
+        core::arch::naked_asm!(
+            // entry está em RDI (primeiro argumento)
+            // boot_info está em RSI (segundo argumento)
+            "mov rax, rdi", // RAX = entry point
+            "mov rdi, rsi", // RDI = boot_info (argumento para kernel)
+            "xor rsi, rsi", // RSI = 0
+            "jmp rax",      // Saltar para entry point!
+        );
+    }
 }
 
 /// Prepara a estrutura KernelArgs
@@ -311,15 +332,4 @@ fn prepare_kernel_args(
     }
 
     Ok(args as *const KernelArgs)
-}
-
-/// Salta para o ponto de entrada do kernel
-///
-/// Esta função nunca retorna.
-fn jump_to_kernel(entry_point: u64, args: *const KernelArgs) -> ! {
-    let kernel_fn: extern "sysv64" fn(*const KernelArgs, usize) -> ! =
-        unsafe { core::mem::transmute(entry_point) };
-
-    // Chamar kernel (stack_end = 0, kernel usa sua própria stack)
-    kernel_fn(args, 0);
 }
