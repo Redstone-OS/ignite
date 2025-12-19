@@ -27,15 +27,17 @@
 extern crate alloc;
 
 pub mod boot_info;
-// pub mod config; // TODO: Debug
+pub mod config;
 pub mod elf;
 pub mod error;
 pub mod fs;
+pub mod hardware;
 pub mod memory;
+pub mod protos;
 pub mod recovery;
-// pub mod security; // TODO: Debug
+pub mod security;
 pub mod types;
-// pub mod ui; // TODO: Debug
+pub mod ui;
 pub mod video;
 
 // use crate::config::BootConfig; // TODO: Debug
@@ -57,123 +59,91 @@ use crate::{
 
 /// Função principal do bootloader
 ///
-/// Orquestra todo o processo de boot: carregamento de arquivos, parsing ELF,
-/// configuração de vídeo e transferência de controle para o kernel.
+/// Orquestra todo o processo de boot com multi-protocol support, configuração e
+/// menu interativo.
 ///
 /// # Argumentos
 /// * `image_handle` - Handle da imagem do bootloader
 /// * `mut system_table` - Tabela de sistema UEFI
 ///
 /// # Retorna
-/// Result indicando sucesso ou tipo de erro
+/// Never returns - transfers control to kernel
 pub fn boot(image_handle: Handle, mut system_table: SystemTable<Boot>) -> ! {
     // Inicializar serviços UEFI
     uefi::helpers::init(&mut system_table).unwrap();
     system_table.stdout().reset(false).unwrap();
 
     info!("═══════════════════════════════════════════════════");
-    info!("  Bootloader Ignite v0.2.0 - Redstone OS");
+    info!("  Bootloader Ignite v0.4.0 - Redstone OS");
     info!("═══════════════════════════════════════════════════");
 
-    // Mostrar hint de tecla de recovery (estilo Ctrl+Alt+Del)
+    // Mostrar hint de tecla de recovery
     KeyDetector::show_recovery_hint();
-
-    // Mostrar hint de tecla de configuração (canto inferior esquerdo)
-    // TODO: Descomentar após implementar BootMenu
-    // BootMenu::show_config_hint();
-
-    // TODO: Verificar se tecla 'R' foi pressionada para entrar em modo recovery
-    // if KeyDetector::check_recovery_key(boot_services) {
-    //     enter_recovery_mode(...);
-    // }
-
-    // TODO: Verificar se tecla 'C' foi pressionada para configuração
-    // if KeyDetector::check_config_key(boot_services) {
-    //     enter_config_mode(...);
-    // }
 
     let boot_services = system_table.boot_services();
 
     // 1. Criar alocador de memória
     let allocator = MemoryAllocator::new(boot_services);
 
-    // 1.1 Carregar configuração de boot
-    // TODO: Carregar de arquivo boot.cfg ou ignite.ini
-    // TODO: Descomentar após implementar BootConfig
-    // let config = BootConfig::default();
-    // info!("Menu de boot: {}", if config.menu.enabled { "habilitado" } else {
-    // "desabilitado" });
-
-    // 1.2 Detectar sistemas operacionais disponíveis
-    // TODO: Implementar detecção automática de Linux/Windows
-    // let os_list = OsList::detect(&mut file_loader);
-    // info!("Sistemas detectados: {}", os_list.count);
-
-    // 1.3 Verificar se deve mostrar menu
-    // TODO: Verificar se tecla foi pressionada
-    // let show_menu = config.should_show_menu(false); // false = nenhuma tecla
-    // pressionada
-
-    // if show_menu {
-    //     info!("Exibindo menu de boot...");
-    //     // TODO: Implementar menu interativo
-    //     // let selected_os = BootMenu::show(&config, &os_list);
-    //     // Carregar OS selecionado
-    // }
-
-    // 1.4 Inicializar opções de boot com fallback
-    // TODO: Carregar contador de tentativas de variável UEFI
-    let mut boot_options = BootOptions::default();
-    info!(
-        "Sistema de fallback: {} tentativas máximas",
-        boot_options.max_attempts
-    );
-
-    // 2. Executar diagnóstico básico (opcional, não bloqueia)
-    info!("Etapa 1/6: Diagnóstico do sistema...");
+    // 2. Carregar configuração (ou usar padrão se arquivo não existir)
+    info!("Etapa 1/7: Carregando configuração...");
     let mut file_loader = FileLoader::new(boot_services, image_handle, &allocator)
         .expect("Falha ao criar file loader");
+
+    let config = load_config(&mut file_loader);
+
+    // Mostrar informações da config
+    if config.quiet {
+        info!("Modo quiet ativado");
+    }
+    if config.verbose {
+        info!("Modo verbose ativado");
+    }
+    info!("Entradas de boot: {}", config.entries.len());
+    info!("Entrada padrão: {}", config.default_entry);
+
+    // 3. Seleção de entrada (menu ou auto-boot)
+    info!("Etapa 2/7: Selecionando entrada de boot...");
+    let selected_index = select_boot_entry(&config);
+    let entry = config.entries[selected_index].clone(); // Clone para evitar lifetime issues
+
+    info!("Boot selecionado: {}", entry.name);
+    info!("  Protocolo: {}", entry.protocol);
+    info!("  Kernel: {}", entry.kernel_path);
+
+    // 4. Executar diagnóstico básico
+    info!("Etapa 3/7: Diagnóstico do sistema...");
     Diagnostics::run_basic_diagnostics(&mut file_loader);
 
-    // 3. Carregar kernel (usando fallback se necessário)
-    info!("Etapa 2/6: Carregando kernel...");
-    let kernel_entry = boot_options.select_kernel();
-    info!("Kernel selecionado: {}", kernel_entry.name);
+    // 5. Carregar kernel
+    info!("Etapa 4/7: Carregando kernel...");
     let kernel_file = file_loader
-        .load_file(kernel_entry.path)
+        .load_file(&entry.kernel_path) // Agora aceita &str dinâmico!
         .expect("Falha ao carregar kernel");
 
-    // 4. Parsear e carregar ELF
-    info!("Etapa 3/6: Parseando e carregando ELF...");
     let kernel_data =
         unsafe { core::slice::from_raw_parts(kernel_file.ptr as *const u8, kernel_file.size) };
 
-    // TODO: Reativar verificações de segurança após debug
-    // 4.1 Verificações de segurança (modo permissivo)
-    // info!("Executando verificações de segurança...");
-    //
-    // Verificar integridade (SHA-256)
-    // let _integrity_result = IntegrityChecker::verify_file(kernel_data, None);
-    // TODO: Carregar hash esperado de manifesto
-    //
-    // Verificar versão (proteção contra rollback)
-    // if let Some(version) = RollbackProtection::extract_version(kernel_data) {
-    // info!("Versão do kernel: {}.{}.{}", version.major, version.minor,
-    // version.patch); let _rollback_result =
-    // RollbackProtection::check_version(version); TODO: Salvar versão em
-    // variável UEFI após boot bem-sucedido }
-    //
-    // Verificar estado do Secure Boot
-    // let sb_state = SecureBootManager::get_state();
-    // info!("Secure Boot: {}", sb_state.as_str());
-    // TODO: Se Secure Boot habilitado, validar assinatura
+    // 6. Carregar módulos (initrd, etc)
+    info!("Etapa 5/7: Carregando módulos...");
+    let modules = load_modules(&mut file_loader, &entry);
 
-    // Continuar com carregamento ELF
-    let elf_loader = ElfLoader::new(&allocator);
-    let loaded_kernel = elf_loader.load(kernel_data).expect("Falha ao carregar ELF");
+    // 7. Selecionar e usar protocolo apropriado
+    let protocol_name = entry.protocol.as_str(); // Get &str from String
+    info!(
+        "Etapa 6/7: Preparando boot com protocolo {}...",
+        protocol_name
+    );
+    let boot_info = use_protocol(
+        &allocator,
+        protocol_name,
+        kernel_data,
+        entry.cmdline.as_deref(),
+        &modules,
+    );
 
-    // 5. Configurar vídeo
-    info!("Etapa 4/6: Configurando vídeo...");
+    // 8. Configurar vídeo
+    info!("Configurando vídeo...");
     let mut video = GopVideoOutput::new(boot_services, image_handle);
     video.initialize().expect("Falha ao inicializar vídeo");
     let framebuffer = video.get_framebuffer();
@@ -182,17 +152,20 @@ pub fn boot(image_handle: Handle, mut system_table: SystemTable<Boot>) -> ! {
         framebuffer.horizontal_resolution, framebuffer.vertical_resolution, framebuffer.ptr
     );
 
-    // 6. Carregar InitFS (opcional)
-    info!("Etapa 5/6: Carregando InitFS...");
-    let initfs = InitFsLoader::load(&mut file_loader).expect("Falha ao carregar InitFS");
-
-    // 7. Preparar argumentos do kernel
-    info!("Etapa 6/6: Preparando argumentos do kernel...");
-    let args = prepare_kernel_args(&allocator, &loaded_kernel, &initfs)
+    // 9. Preparar argumentos do kernel (para protocolos que usam)
+    info!("Etapa 7/7: Preparando handoff para kernel...");
+    let args = prepare_kernel_args_from_boot_info(&allocator, &boot_info, &modules, &framebuffer)
         .expect("Falha ao preparar argumentos");
 
-    // 7.5 Criar BootInfo com memory map REAL da UEFI
-    const MEMORY_MAP_ADDR: usize = 0x9000;
+    // Criar BootInfo com memory map REAL da UEFI
+    let boot_info_ptr = allocator
+        .allocate_any(1)
+        .expect("Failed to allocate BootInfo") as *mut boot_info::BootInfo;
+    let boot_info_addr = boot_info_ptr as u64;
+
+    // Memory map vai logo após o BootInfo
+    const BOOT_INFO_SIZE: usize = core::mem::size_of::<boot_info::BootInfo>();
+    let memory_map_addr = (boot_info_addr + BOOT_INFO_SIZE as u64) as usize;
     const MAX_REGIONS: usize = 256;
 
     // Obter memory map da UEFI
@@ -205,7 +178,7 @@ pub fn boot(image_handle: Handle, mut system_table: SystemTable<Boot>) -> ! {
     // Converter para nosso formato
     let memory_regions = unsafe {
         core::slice::from_raw_parts_mut(
-            MEMORY_MAP_ADDR as *mut boot_info::MemoryRegion,
+            memory_map_addr as *mut boot_info::MemoryRegion,
             MAX_REGIONS,
         )
     };
@@ -230,25 +203,36 @@ pub fn boot(image_handle: Handle, mut system_table: SystemTable<Boot>) -> ! {
 
     info!("Memory map: {} regions collected from UEFI", region_count);
 
-    // Criar e escrever BootInfo
-    let boot_info = boot_info::BootInfo {
+    // Criar e escrever BootInfo UEFI
+    let uefi_boot_info = boot_info::BootInfo {
         fb_addr:         framebuffer.ptr,
         fb_width:        framebuffer.horizontal_resolution as u32,
         fb_height:       framebuffer.vertical_resolution as u32,
         fb_stride:       framebuffer.stride as u32,
         fb_format:       0,
-        kernel_base:     loaded_kernel.base_address,
-        kernel_size:     loaded_kernel.size,
-        initfs_addr:     initfs.as_ref().map(|f| f.ptr).unwrap_or(0),
-        initfs_size:     initfs.as_ref().map(|f| f.size as u64).unwrap_or(0),
-        memory_map_addr: MEMORY_MAP_ADDR as u64,
+        kernel_base:     boot_info.kernel_base,
+        kernel_size:     boot_info.kernel_size,
+        initfs_addr:     if !modules.is_empty() {
+            modules[0].ptr
+        } else {
+            0
+        },
+        initfs_size:     if !modules.is_empty() {
+            modules[0].size as u64
+        } else {
+            0
+        },
+        memory_map_addr: memory_map_addr as u64,
         memory_map_size: region_count as u64,
     };
 
     unsafe {
-        boot_info.write();
+        boot_info_ptr.write(uefi_boot_info);
     }
-    info!("BootInfo written to 0x8000");
+    info!(
+        "BootInfo written to {:#x} (allocated by UEFI)",
+        boot_info_addr
+    );
 
     // 8. Desativar watchdog timer
     boot_services
@@ -258,7 +242,7 @@ pub fn boot(image_handle: Handle, mut system_table: SystemTable<Boot>) -> ! {
     // 9. Logging final
     info!("═══════════════════════════════════════════════════");
     info!("  Boot completo. Transferindo controle...");
-    info!("  Entry Point: {:#x}", loaded_kernel.entry_point);
+    info!("  Entry Point: {:#x}", boot_info.entry_point);
     unsafe {
         info!("  Kernel Base: {:#x}", (*args).kernel_base);
         info!("  Kernel Size: {:#x}", (*args).kernel_size);
@@ -270,6 +254,8 @@ pub fn boot(image_handle: Handle, mut system_table: SystemTable<Boot>) -> ! {
     }
     info!("═══════════════════════════════════════════════════");
 
+    info!("Chamando exit_boot_services...");
+
     // 10. Sair dos serviços de boot
     // TODO: Se boot for bem-sucedido (kernel assume controle),
     // resetar contador de tentativas em próximo boot
@@ -278,7 +264,26 @@ pub fn boot(image_handle: Handle, mut system_table: SystemTable<Boot>) -> ! {
     // 11. Saltar para o kernel usando função naked
     // IMPORTANTE: Inline assembly não funciona, usar naked function
     unsafe {
-        jump_to_kernel_naked(loaded_kernel.entry_point, 0x8000);
+        // Enviar byte 'J' para serial (0x3F8) para confirmar que passamos do
+        // exit_boot_services
+        core::arch::asm!(
+            "mov dx, 0x3F8",
+            "mov al, 0x4A", // 'J'
+            "out dx, al"
+        );
+
+        // DEBUG: Mostrar entry point no serial antes do salto
+        let entry = boot_info.entry_point;
+        let boot_info_arg = boot_info_addr;
+
+        // Enviar 'K' indicando que vamos saltar
+        core::arch::asm!(
+            "mov dx, 0x3F8",
+            "mov al, 0x4B", // 'K'
+            "out dx, al"
+        );
+
+        jump_to_kernel_naked(entry, boot_info_arg);
     }
 }
 
@@ -288,16 +293,230 @@ pub fn boot(image_handle: Handle, mut system_table: SystemTable<Boot>) -> ! {
 /// seja exatamente como escrevemos, sem prólogo/epílogo do compilador
 #[unsafe(naked)]
 extern "C" fn jump_to_kernel_naked(entry: u64, boot_info: u64) -> ! {
-    unsafe {
-        core::arch::naked_asm!(
-            // entry está em RDI (primeiro argumento)
-            // boot_info está em RSI (segundo argumento)
-            "mov rax, rdi", // RAX = entry point
-            "mov rdi, rsi", // RDI = boot_info (argumento para kernel)
-            "xor rsi, rsi", // RSI = 0
-            "jmp rax",      // Saltar para entry point!
-        );
+    core::arch::naked_asm!(
+        // SYSTEM V ABI (Linux/Bare Metal): RDI, RSI, RDX, RCX, R8, R9
+        // MICROSOFT ABI (UEFI/Windows):    RCX, RDX, R8,  R9
+
+        // O Ignite roda sobre UEFI, então esta função é chamada usando Microsoft ABI.
+        // Argumentos de entrada:
+        // - entry:     RCX (1º argumento)
+        // - boot_info: RDX (2º argumento)
+
+        // O Kernel (Forge) espera System V ABI (padrão Rust no_std/Linux).
+        // Argumentos esperados pelo _start:
+        // - boot_info: RDI (1º argumento)
+
+        // 1. Salvar o entry point (RX) em um registrador temporário
+        "mov rax, rcx",
+        // 2. Mover o argumento boot_info (RDX) para onde o kernel espera (RDI)
+        "mov rdi, rdx",
+        // 3. Garantir stack alinhado em 16 bytes (exigido pela ABI x86-64)
+        "and rsp, 0xFFFFFFFFFFFFFFF0",
+        // 4. Chamar o kernel
+        "call rax",
+        // Loop infinito caso retorne
+        "2:",
+        "cli",
+        "hlt",
+        "jmp 2b",
+    );
+}
+
+// ═══════════════════════════════════════════════════════════════════════════
+// Helper Functions for New Boot System
+// ═══════════════════════════════════════════════════════════════════════════
+
+/// Carrega configuração do arquivo ou usa configuração padrão
+fn load_config(file_loader: &mut FileLoader) -> config::types::BootConfig {
+    use config::parser::ConfigParser;
+
+    // Tentar carregar ignite.conf
+    if let Ok(config_file) = file_loader.load_file("ignite.conf") {
+        let config_data =
+            unsafe { core::slice::from_raw_parts(config_file.ptr as *const u8, config_file.size) };
+
+        // Converter bytes para string
+        if let Ok(config_str) = core::str::from_utf8(config_data) {
+            info!(
+                "Arquivo ignite.conf encontrado ({} bytes)",
+                config_file.size
+            );
+
+            // Parsear configuração
+            match ConfigParser::parse(config_str) {
+                Ok(config) => {
+                    info!("Configuração parseada com sucesso");
+                    return config;
+                },
+                Err(e) => {
+                    info!("Erro ao parsear config: {:?}, usando padrão", e);
+                },
+            }
+        }
     }
+
+    // Fallback: configuração hardcoded
+    info!("Usando configuração padrão (ignite.conf não encontrado)");
+    create_default_config()
+}
+
+/// Cria configuração padrão para Redstone OS
+fn create_default_config() -> config::types::BootConfig {
+    use alloc::{string::String, vec::Vec};
+
+    use config::types::{BootConfig, MenuEntry, WallpaperStyle};
+
+    let mut config = BootConfig {
+        timeout:              Some(0), // Boot imediato
+        default_entry:        1,
+        quiet:                false,
+        serial:               true,
+        serial_baudrate:      115200,
+        verbose:              true,
+        interface_resolution: None,
+        interface_branding:   Some(String::from("Ignite v0.4 - Redstone OS")),
+        wallpaper:            None,
+        wallpaper_style:      WallpaperStyle::Centered,
+        editor_enabled:       false,
+        entries:              Vec::new(),
+    };
+
+    // Entrada padrão para Redstone OS
+    let entry = MenuEntry::new(
+        String::from("Redstone OS (default)"),
+        String::from("limine"),
+        String::from("boot():/forge"),
+    );
+
+    config.entries.push(entry);
+    config
+}
+
+/// Seleciona entrada de boot (menu ou auto-boot)
+fn select_boot_entry(config: &config::types::BootConfig) -> usize {
+    // Se timeout é 0 ou entries é 1, auto-boot na entrada padrão
+    if config.timeout == Some(0) || config.entries.len() == 1 {
+        let index = if config.default_entry > 0 && config.default_entry <= config.entries.len() {
+            config.default_entry - 1 // Converter de 1-based para 0-based
+        } else {
+            0
+        };
+        info!("Auto-boot (timeout=0 ou 1 entrada)");
+        return index;
+    }
+
+    // TODO: Aqui deveria mostrar o menu interativo
+    // Por enquanto, apenas usa default_entry
+    info!("Menu desabilitado, usando entrada padrão");
+    let index = if config.default_entry > 0 && config.default_entry <= config.entries.len() {
+        config.default_entry - 1
+    } else {
+        0
+    };
+    index
+}
+
+/// Carrega módulos (initrd, etc) para a entrada
+fn load_modules(
+    file_loader: &mut FileLoader,
+    entry: &config::types::MenuEntry,
+) -> alloc::vec::Vec<types::LoadedFile> {
+    use alloc::vec::Vec;
+
+    let mut modules = Vec::new();
+
+    for module in &entry.modules {
+        info!("Carregando módulo: {}", module.path);
+        match file_loader.load_file(&module.path) {
+            Ok(file) => {
+                info!("  Módulo carregado: {} bytes", file.size);
+                modules.push(file);
+            },
+            Err(e) => {
+                info!("  Aviso: falha ao carregar módulo: {:?}", e);
+                // Continua sem o módulo
+            },
+        }
+    }
+
+    modules
+}
+
+/// Usa o protocolo apropriado para preparar o boot
+fn use_protocol(
+    allocator: &MemoryAllocator,
+    protocol_name: &str,
+    kernel_data: &[u8],
+    cmdline: Option<&str>,
+    modules: &[types::LoadedFile],
+) -> protos::BootInfo {
+    use protos::{BootProtocol, limine::LimineProtocol};
+
+    // Por enquanto, suporta apenas Limine
+    // TODO: Adicionar seleção de outros protocolos (linux, multiboot1, multiboot2,
+    // efi)
+    match protocol_name.to_lowercase().as_str() {
+        "limine" => {
+            info!("Usando Limine Protocol");
+            let mut protocol = LimineProtocol::new(allocator);
+
+            // Validar
+            protocol
+                .validate(kernel_data)
+                .expect("Kernel inválido para protocolo Limine");
+
+            // Preparar
+            protocol
+                .prepare(kernel_data, cmdline, modules)
+                .expect("Falha ao preparar boot")
+        },
+        _ => {
+            info!(
+                "Protocolo '{}' não implementado ainda, usando Limine como fallback",
+                protocol_name
+            );
+            let mut protocol = LimineProtocol::new(allocator);
+            protocol.validate(kernel_data).expect("Kernel inválido");
+            protocol
+                .prepare(kernel_data, cmdline, modules)
+                .expect("Falha ao preparar boot")
+        },
+    }
+}
+
+/// Prepara argumentos do kernel a partir do BootInfo do protocolo
+fn prepare_kernel_args_from_boot_info(
+    allocator: &MemoryAllocator,
+    boot_info: &protos::BootInfo,
+    modules: &[types::LoadedFile],
+    framebuffer: &types::Framebuffer,
+) -> Result<*const KernelArgs> {
+    // Alocar memória para KernelArgs
+    let args_ptr = allocator.allocate_any(1)?;
+    let args = unsafe { &mut *(args_ptr as *mut KernelArgs) };
+
+    // Preencher estrutura
+    args.kernel_base = boot_info.kernel_base;
+    args.kernel_size = boot_info.kernel_size;
+    args.stack_base = boot_info.stack_ptr.unwrap_or(0);
+    args.stack_size = 0;
+    args.env_base = 0;
+    args.env_size = 0;
+    args.hwdesc_base = 0; // TODO: Encontrar RSDP
+    args.hwdesc_size = 0;
+    args.areas_base = 0;
+    args.areas_size = 0;
+
+    // Configurar InitFS se disponível (primeiro módulo)
+    if !modules.is_empty() {
+        args.bootstrap_base = modules[0].ptr;
+        args.bootstrap_size = modules[0].size as u64;
+    } else {
+        args.bootstrap_base = 0;
+        args.bootstrap_size = 0;
+    }
+
+    Ok(args as *const KernelArgs)
 }
 
 /// Prepara a estrutura KernelArgs

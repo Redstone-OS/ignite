@@ -1,7 +1,8 @@
 //! Sistema de erros centralizado do bootloader Ignite
 //!
-//! Este módulo define todos os tipos de erro que podem ocorrer durante o processo de boot,
-//! organizados por categoria (FileSystem, ELF, Memory, Video, etc.)
+//! Este módulo define todos os tipos de erro que podem ocorrer durante o
+//! processo de boot, organizados por categoria (FileSystem, ELF, Memory, Video,
+//! etc.)
 
 use core::fmt;
 
@@ -28,8 +29,8 @@ pub enum BootError {
 /// Erros de sistema de arquivos
 #[derive(Debug)]
 pub enum FileSystemError {
-    /// Arquivo não encontrado
-    FileNotFound(&'static str),
+    /// Arquivo não encontrado (filename logged separately)
+    FileNotFound,
     /// Erro ao ler arquivo
     ReadError,
     /// Caminho inválido
@@ -108,7 +109,7 @@ impl fmt::Display for BootError {
 impl fmt::Display for FileSystemError {
     fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
         match self {
-            FileSystemError::FileNotFound(name) => write!(f, "Arquivo '{}' não encontrado", name),
+            FileSystemError::FileNotFound => write!(f, "Arquivo não encontrado"),
             FileSystemError::ReadError => write!(f, "Erro ao ler arquivo"),
             FileSystemError::InvalidPath => write!(f, "Caminho inválido"),
             FileSystemError::VolumeOpenError => write!(f, "Erro ao abrir volume"),

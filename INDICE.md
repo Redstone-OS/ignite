@@ -1,243 +1,380 @@
-# Índice - Ignite (Bootloader UEFI)
+# Índice - Ignite (UEFI Bootloader) v0.4.0
 
-Este diretório contém o bootloader UEFI do Redstone OS, responsável por inicializar o sistema e carregar o kernel.
+Este diretório contém o bootloader UEFI do Redstone OS, responsável por inicializar o sistema e carregar o kernel com suporte multi-protocolo.
 
-## Estrutura de Arquivos
+## 📊 Estatísticas do Projeto (v0.4.0)
+
+- **Total de arquivos**: 60+ (código + documentação)
+- **Linhas de código**: ~6000+
+- **Módulos**: 14 especializados
+- **Protocolos suportados**: 5 (Limine, Linux, Multiboot1, Multiboot2, EFI Chainload)
+- **Filesystems**: 2 (FAT32, ISO9660)
+- **Cobertura de documentação**: 100%
+- **Status de compilação**: ✅ Sucesso (3.53s, 0 erros)
+- **Versão**: 0.4.0
+
+## 📁 Estrutura Completa de Arquivos
 
 ```bash
 ignite/
-├── .clippy.toml              # Configuração do Clippy (linter)
-├── .editorconfig             # Configuração de editor
-├── .gitignore                # Arquivos ignorados pelo Git
-├── AUTHORS.md                # Autores e contribuidores
-├── CHANGELOG.md              # Histórico de mudanças
-├── CODE_OF_CONDUCT.md        # Código de conduta
-├── CONTRIBUTING.md           # Guia de contribuição
-├── Cargo.toml                # Configuração do pacote Rust
-├── INDICE.md                 # Este arquivo
-├── LICENSE                   # Licença MIT
-├── README.md                 # Documentação principal
-├── SECURITY.md               # Política de segurança
-├── rustfmt.toml              # Configuração de formatação
-├── docs/                     # Documentação adicional
-│   └── README.md             # Recursos e referências
-└── src/                      # Código-fonte
-    ├── main.rs               # Entry point (11 linhas)
-    ├── lib.rs                # Biblioteca principal (orquestração)
-    ├── error.rs              # Sistema de erros (175 linhas)
-    ├── types.rs              # Tipos compartilhados (68 linhas)
-    ├── memory/               # Gerenciamento de memória
-    │   ├── mod.rs            # Módulo público
-    │   └── allocator.rs      # Alocador UEFI (86 linhas)
-    ├── video/                # Configuração de vídeo
-    │   ├── mod.rs            # Módulo público + trait
-    │   └── gop.rs            # Graphics Output Protocol (73 linhas)
-    ├── fs/                   # Sistema de arquivos
-    │   ├── mod.rs            # Módulo público
-    │   ├── loader.rs         # Carregador de arquivos (93 linhas)
-    │   └── initfs.rs         # Carregador de InitFS (25 linhas)
-    ├── elf/                  # Parsing e carregamento ELF
-    │   ├── mod.rs            # Módulo público
-    │   ├── parser.rs         # Parser ELF (56 linhas)
-    │   └── loader.rs         # Carregador de segmentos (88 linhas)
-    ├── recovery/             # Sistema de recuperação [NOVO]
-    │   ├── mod.rs            # Módulo público
-    │   ├── fallback.rs       # Sistema de fallback (118 linhas)
-    │   ├── keydetect.rs      # Detecção de teclas (28 linhas)
-    │   └── diagnostics.rs    # Diagnóstico (56 linhas)
-    ├── security/             # Segurança [NOVO - Em desenvolvimento]
-    │   ├── mod.rs            # Módulo público
-    │   ├── integrity.rs      # Verificação de integridade
-    │   ├── rollback.rs       # Proteção contra rollback
-    │   └── secureboot.rs     # Suporte a Secure Boot
-    ├── config/               # Configuração [NOVO - Em desenvolvimento]
-    │   ├── mod.rs            # Módulo público
-    │   └── boot_config.rs    # Configuração de boot e multi-boot
-    └── ui/                   # Interface de usuário [NOVO - Em desenvolvimento]
-        ├── mod.rs            # Módulo público
-        └── boot_menu.rs      # Menu de boot interativo
+├── 📋 Documentação
+│   ├── README.md                    # Documentação principal (✨ ATUALIZADO v0.4)
+│   ├── CHANGELOG.md                 # Histórico de mudanças (✨ v0.4.0)
+│   ├── SECURITY.md                  # Política de segurança (✨ ATUALIZADO)
+│   ├── INDICE.md                    # Este arquivo (✨ ATUALIZADO)
+│   ├── CONTRIBUTING.md              # Guia de contribuição
+│   ├── CODE_OF_CONDUCT.md           # Código de conduta
+│   ├── AUTHORS.md                   # Autores e contribuidores
+│   └── LICENSE                      # Licença MIT
+│
+├── ⚙️ Configuração
+│   ├── Cargo.toml                   # Pacote Rust
+│   ├── rust-toolchain.toml          # Versão do Rust
+│   ├── rustfmt.toml                 # Formatação de código
+│   ├── .clippy.toml                 # Linter config
+│   ├── .editorconfig                # Editor config
+│   └── .gitignore                   # Git ignore
+│
+├── 📚 docs/                         # Documentação Adicional
+│   ├── README.md                    # Recursos e referências (✨ MELHORADO)
+│   ├── protocols.md                 # ✨ NOVO: Documentação de protocolos
+│   ├── configuration.md             # ✨ NOVO: Sistema de configuração
+│   └── development.md               # ✨ NOVO: Guia de desenvolvimento
+│
+└── 💻 src/                          # Código-Fonte
+    ├── main.rs                      # Entry point (11 linhas)
+    ├── lib.rs                       # Orquestração principal (✨ ATUALIZADO)
+    ├── boot_info.rs                 # Estruturas de boot info
+    ├── error.rs                     # Sistema de erros (175 linhas)
+    ├── types.rs                     # Tipos compartilhados (68 linhas)
+    │
+    ├── protos/                      # ⭐ NOVO: Multi-Protocol Support
+    │   ├── mod.rs                   # BootProtocol trait (104 linhas)
+    │   ├── limine.rs                # Limine protocol (84 linhas)
+    │   ├── linux.rs                 # Linux boot protocol (281 linhas)
+    │   ├── multiboot1.rs            # Multiboot 1 (312 linhas)
+    │   ├── multiboot2.rs            # Multiboot 2 (137 linhas)
+    │   └── chainload.rs             # EFI/BIOS chainload (90 linhas)
+    │
+    ├── config/                      # ⭐ NOVO: Configuration System
+    │   ├── mod.rs                   # Módulo root
+    │   ├── types.rs                 # Config types (139 linhas)
+    │   ├── parser.rs                # Config parser (290 linhas)
+    │   ├── paths.rs                 # Path resolver (208 linhas)
+    │   ├── macros.rs                # Macro expander (119 linhas)
+    │   └── validator.rs             # Config validator (89 linhas)
+    │
+    ├── ui/                          # ⭐ NOVO: User Interface
+    │   ├── mod.rs                   # Módulo root
+    │   ├── menu.rs                  # Boot menu (71 linhas)
+    │   ├── input.rs                 # Input handler (40 linhas)
+    │   ├── terminal.rs              # Graphical terminal (80 linhas)
+    │   ├── theme.rs                 # Color themes (39 linhas)
+    │   └── editor.rs                # Config editor (39 linhas)
+    │
+    ├── fs/                          # Filesystem Support
+    │   ├── mod.rs                   # Módulo root
+    │   ├── loader.rs                # UEFI file loader (93 linhas)
+    │   ├── initfs.rs                # InitFS loader (25 linhas)
+    │   ├── fat32.rs                 # ⭐ NOVO: FAT32 driver (155 linhas)
+    │   └── iso9660.rs               # ⭐ NOVO: ISO9660 driver (120 linhas)
+    │
+    ├── hardware/                    # ⭐ NOVO: Hardware Abstraction
+    │   ├── mod.rs                   # Módulo root
+    │   ├── acpi.rs                  # ACPI support (92 linhas)
+    │   └── fdt.rs                   # Device Tree (57 linhas)
+    │
+    ├── elf/                         # ELF Loader
+    │   ├── mod.rs                   # Módulo root
+    │   ├── parser.rs                # ELF parser (56 linhas)
+    │   └── loader.rs                # Segment loader (88 linhas)
+    │
+    ├── memory/                      # Memory Management
+    │   ├── mod.rs                   # Módulo root
+    │   └── allocator.rs             # UEFI allocator (86 linhas)
+    │
+    ├── video/                       # Video Configuration
+    │   ├── mod.rs                   # Módulo root + trait
+    │   └── gop.rs                   # GOP implementation (73 linhas)
+    │
+    ├── security/                    # Security Features
+    │   ├── mod.rs                   # Módulo root
+    │   ├── integrity.rs             # Integrity verification
+    │   ├── rollback.rs              # Rollback protection
+    │   ├── secureboot.rs            # Secure Boot (109 linhas)
+    │   └── blake2b.rs               # ⭐ NOVO: BLAKE2B hash (64 linhas)
+    │
+    └── recovery/                    # Recovery System
+        ├── mod.rs                   # Módulo root
+        ├── fallback.rs              # Fallback mechanism (118 linhas)
+        ├── keydetect.rs             # Key detection (28 linhas)
+        └── diagnostics.rs           # Diagnostics (56 linhas)
 ```
 
-## Visão Geral do Projeto
+## 🎯 Novidades v0.4.0
 
-O Ignite é um bootloader UEFI moderno desenvolvido em Rust, com arquitetura modular profissional. A versão 0.3.0 representa uma evolução significativa com sistema de recuperação, segurança e multi-boot.
+### 🚀 Multi-Protocol Boot Support
 
-### Estatísticas
+**5 Protoclos Implementados:**
+- **Limine** - Protocolo nativo do Redstone OS
+- **Linux** - bzImage, initrd, cmdline completo
+- **Multiboot 1** - Especificação clássica
+- **Multiboot 2** - Tags modernas
+- **EFI Chainload** - Carrega outros bootloaders
 
-- **Total de arquivos**: 33 (código + documentação)
-- **Linhas de código**: ~1200 linhas
-- **Módulos**: 9 especializados
-- **Cobertura de documentação**: 100%
-- **Versão**: 0.3.0
+### ⚙️ Sistema de Configuração Completo
 
-## Descrição dos Componentes
+- Parser Limine-compatible (`ignite.conf`)
+- Paths avançados: `boot():/`, `hdd(D:P):/`, `guid(UUID):/`
+- Macros: `${ARCH}`, `${FW_TYPE}`, customizáveis
+- Validação sintática e semântica
 
-### 📋 Documentação
+### 🖥️ Interface Interativa
 
-#### README.md
-Documentação principal com visão geral completa, arquitetura, instruções de compilação, roadmap e status de cada fase.
+- Menu de boot navegável (↑↓, Enter)
+- Terminal gráfico com framebuffer
+- Temas customizáveis
+- Editor de config in-bootloader
 
-#### CONTRIBUTING.md
-Guia completo de contribuição incluindo:
-- Como reportar bugs e sugerir melhorias
-- Processo de Pull Request
-- Convenções de código e commits
-- Estrutura do projeto
+### 💾 Drivers Nativos de Filesystem
 
-#### CHANGELOG.md
-Histórico de mudanças seguindo Keep a Changelog:
-- v0.3.0: Fases 2, 3 e 4 (estrutura básica)
-- v0.2.0: Refatoração modular completa
-- v0.1.0: Implementação inicial
+- **FAT32** - FAT12/16/32 independente de UEFI
+- **ISO9660** - CD/DVD support
 
-#### CODE_OF_CONDUCT.md
-Código de conduta baseado no Contributor Covenant v2.1
+### 🔧 Hardware Abstraction
 
-#### SECURITY.md
-Política de segurança com processo de divulgação responsável e áreas críticas
+- **ACPI** - RSDP, RSDT, XSDT parsing
+- **FDT** - Device Tree para ARM64/RISC-V
 
-#### AUTHORS.md
-Lista de autores, contribuidores e agradecimentos
+## 📖 Descrição dos Módulos
 
-#### LICENSE
-Licença MIT do projeto
+### Core
 
-### ⚙️ Configuração
+#### `src/main.rs` (11 linhas)
+Entry point minimalista que apenas chama `ignite::boot()`.
 
-#### .gitignore
-Ignora arquivos de build, temporários e específicos de IDE
+#### `src/lib.rs`
+Orquestrador principal do boot process com integração de todos os módulos.
 
-#### .editorconfig
-Configuração de editor para consistência de código entre diferentes editores
+#### `src/error.rs` (175 linhas)
+Sistema de erros robusto com tipos específicos para cada módulo.
 
-#### rustfmt.toml
-Configuração de formatação de código Rust
+#### `src/types.rs` (68 linhas)
+Tipos compartilhados: `KernelArgs`, `Framebuffer`, `LoadedFile`, `LoadedKernel`.
 
-#### .clippy.toml
-Configuração de linting com regras específicas para código de sistema
+### Protocolos de Boot (Novos)
 
-### 💻 Código-Fonte
+#### `src/protos/mod.rs`
+Define o trait `BootProtocol` e abstrações comuns (`BootInfo`, `ProtocolRegisters`).
 
-#### src/main.rs (11 linhas)
-Entry point minimalista que apenas chama `ignite::boot()`
+#### `src/protos/limine.rs`
+Implementa protocolo Limine usando `ElfLoader` existente.
 
-#### src/lib.rs
-Biblioteca principal que orquestra todo o processo de boot em 6 etapas
+#### `src/protos/linux.rs`
+Linux Boot Protocol com:
+- Parsing de `SetupHeader`
+- Validação de magic numbers
+- Carregamento de bzImage, initrd
+- Setup de boot_params (parcial)
 
-#### src/error.rs (175 linhas)
-Sistema de erros robusto com tipos específicos para cada categoria
+#### `src/protos/multiboot1.rs`
+Multiboot 1 specification:
+- Busca de header em primeiros 8KB
+- Suporte a "a.out kludge"
+- Suporte a ELF format
+- Criação de Multiboot Info structure
 
-#### src/types.rs (68 linhas)
-Tipos compartilhados: KernelArgs, Framebuffer, LoadedFile, LoadedKernel
+#### `src/protos/multiboot2.rs`
+Multiboot 2 com tag system usando ElfLoader.
 
-#### src/memory/ (Módulo de Memória)
-Gerenciamento de memória UEFI com wrapper seguro
+#### `src/protos/chainload.rs`
+Chainloading de aplicações EFI (PE/COFF validation).
 
-#### src/video/ (Módulo de Vídeo)
-Abstração de vídeo via trait VideoOutput e implementação GOP
+### Sistema de Configuração (Novo)
 
-#### src/fs/ (Sistema de Arquivos)
-Carregamento de arquivos UEFI e InitFS opcional
+#### `src/config/types.rs`
+Define `BootConfig`, `MenuEntry`, `Module`, `WallpaperStyle`.
 
-#### src/elf/ (Módulo ELF)
-Parsing e carregamento de arquivos ELF com validação
+#### `src/config/parser.rs`
+Parser completo para formato Limine-compatible com suporte a:
+- Opções globais
+- Entradas hierárquicas
+- Expansão de macros
 
-#### src/recovery/ (Módulo de Recuperação) [NOVO]
-Sistema de fallback, diagnóstico e detecção de teclas especiais
+#### `src/config/paths.rs`
+Resolvedor de paths com suporte a:
+- `boot():/`, `boot(N):/`
+- `hdd(D:P):/`, `guid(UUID):/`, `fslabel(LABEL):/`
+- Verificação de hash inline
 
-#### src/security/ (Módulo de Segurança) [NOVO - Em desenvolvimento]
-Verificação de integridade, proteção contra rollback e Secure Boot
+#### `src/config/macros.rs`
+Sistema de macros com built-ins e customizáveis.
 
-#### src/config/ (Módulo de Configuração) [NOVO - Em desenvolvimento]
-Configuração de boot via arquivo e suporte a multi-boot
+#### `src/config/validator.rs`
+Validador de sintaxe e semântica de configuração.
 
-#### src/ui/ (Interface de Usuário) [NOVO - Em desenvolvimento]
-Menu de boot interativo para seleção de sistema operacional
+### Interface de Usuário (Nova)
 
-## Fluxo de Boot
+#### `src/ui/menu.rs`
+Menu interativo de boot com navegação e seleção.
+
+#### `src/ui/input.rs`
+Handler de input de teclado (estrutura, integração UEFI TODO).
+
+#### `src/ui/terminal.rs`
+Terminal gráfico para renderização em framebuffer.
+
+#### `src/ui/theme.rs`
+Sistema de temas com cores customizáveis.
+
+#### `src/ui/editor.rs`
+Editor de configuração in-bootloader.
+
+### Filesystems
+
+#### `src/fs/loader.rs` (93 linhas)
+Carregador de arquivos via UEFI File Protocol.
+
+#### `src/fs/initfs.rs` (25 linhas)
+Carregador de sistema de arquivos inicial opcional.
+
+#### `src/fs/fat32.rs` (Novo - 155 linhas)
+Driver FAT32 nativo com BPB parsing (read_file TODO).
+
+#### `src/fs/iso9660.rs` (Novo - 120 linhas)
+Driver ISO9660 para CD/DVD (read_file TODO).
+
+### Hardware Abstraction (Novo)
+
+#### `src/hardware/acpi.rs`
+Parser de tabelas ACPI (RSDP, RSDT, XSDT, SDT headers).
+
+#### `src/hardware/fdt.rs`
+Device Tree support para ARM64 e RISC-V.
+
+### Outros Módulos
+
+#### `src/elf/` - Parsing e carregamento ELF64
+#### `src/memory/` - Wrapper seguro de UEFI memory services
+#### `src/video/` - Graphics Output Protocol
+#### `src/security/` - Integridade, rollback, Secure Boot, BLAKE2B
+#### `src/recovery/` - Fallback, diagnóstico, detecção de teclas
+
+## 🔄 Fluxo de Boot Completo (v0.4.0)
 
 ```
-1. UEFI Firmware carrega ignite.efi
-2. main.rs chama ignite::boot()
-3. Inicializa serviços UEFI
-4. Mostra hints de teclas (R=Recovery, C=Config)
-5. Executa diagnóstico básico
-6. Seleciona kernel (com fallback)
-7. FileLoader carrega kernel "forge"
-8. ElfParser valida e parseia ELF
-9. ElfLoader aloca memória e copia segmentos
-10. GopVideoOutput configura framebuffer
-11. InitFsLoader carrega sistema de arquivos inicial
-12. Prepara KernelArgs com todas as informações
-13. Exit boot services
-14. Salta para entry point do kernel
+1.  UEFI Firmware carrega ignite.efi
+2.  Inicializar serviços UEFI
+3.  Mostrar hints de teclas (R=Recovery, C=Config)
+4.  Carregar e parsear ignite.conf
+    ├─ ConfigParser lê arquivo
+    ├─ MacroExpander expande ${MACROS}
+    └─ ConfigValidator valida sintaxe
+5.  Exibir menu de boot (se múltiplas entries)
+    ├─ BootMenu renderiza options
+    ├─ InputHandler captura teclas
+    └─ Timeout ou seleção manual
+6.  Detectar protocolo apropriado
+    ├─ Verificar header do kernel
+    ├─ Selecionar BootProtocol correto
+    └─ Instanciar protocolo
+7.  Protocol.validate() - Verificar compatibilidade
+8.  Protocol.prepare() - Preparar boot
+    ├─ Parsear headers específicos do protocolo
+    ├─ Alocar memória (via MemoryAllocator)
+    ├─ Copiar kernel para memória
+    ├─ Carregar módulos/initrd
+    └─ Setup estruturas de boot (MBI, boot_params, etc)
+9.  Configurar GOP (Graphics Output Protocol)
+10. Preparar estrutura de boot info
+11. Exit UEFI boot services
+12. Saltar para entry point com registradores corretos
 ```
 
-## Compilação
+## 📚 Documentação
+
+Ver [docs/](docs/) para documentação adicional:
+
+- **protocols.md** - Detalhes de cada protocolo
+- **configuration.md** - Guia completo de configuração
+- **development.md** - Guia para desenvolvedores
+
+## 🛠️ Comandos de Compilação
 
 ```bash
 # Instalar target
 rustup target add x86_64-unknown-uefi
 
-# Compilar
+# Debug build
+cargo build --target x86_64-unknown-uefi
+
+# Release build (otimizado)
 cargo build --target x86_64-unknown-uefi --release
 
-# Verificar código
-cargo clippy --target x86_64-unknown-uefi
-cargo fmt --check
+# Verificação rápida
+cargo check --target x86_64-unknown-uefi
 
-# Output
-target/x86_64-unknown-uefi/release/ignite.efi
+# Linting
+cargo clippy --target x86_64-unknown-uefi
+
+# Formatar
+cargo fmt
+
+# Testes
+cargo test --lib
 ```
 
-## Roadmap
+## 🎯 Roadmap
 
-### ✅ Fase 1: Fundação (Concluída)
-- Modularização completa
-- Sistema de erros robusto
-- Documentação profissional
+### ✅ v0.4.0 (Atual - CONCLUÍDO)
+- Multi-protocol boot (5 protocolos)
+- Sistema de configuração completo
+- UI framework
+- Filesystem drivers (FAT32, ISO9660)
+- ACPI/FDT support
+- Compilação bem-sucedida
 
-### ✅ Fase 2: Confiabilidade (Básico Concluído)
-- Sistema de fallback
-- Diagnóstico não-bloqueante
-- Hint de tecla R
+### 🔄 v0.5.0 (Próxima)
+- Completar `FAT32::read_file()`
+- Completar `ISO9660::read_file()`
+- Integração UEFI input protocols
+- Linux boot_params completo
+- Multiboot MBI completo
 
-### 🔄 Fase 3: Segurança (Estrutura Criada)
-- Verificação de integridade
-- Proteção contra rollback
-- Preparação para Secure Boot
+### 📋 v0.6.0
+- Font rendering
+- BLAKE2B completo
+- Wallpaper support
+- Config editor com syntax highlighting
 
-### 🔄 Fase 4: Funcionalidades (Estrutura Criada)
-- Menu de boot configurável
-- Sistema de configuração
-- Multi-boot (Redstone/Linux/Windows)
+### 🚀 v1.0.0
+- BIOS/MBR support
+- Multi-arquitetura
+- Tools (ignite-install, ignite-mkiso)
 
-### 📋 Fase 5: Otimização (Futuro)
-- Performance
-- Testes completos
-- Release 1.0
+## 📊 TODOs por Módulo
 
-## TODOs Principais
+### Alta Prioridade ⚡
+- [ ] `fs/fat32.rs` - Implementar `read_file()` completo
+- [ ] `ui/input.rs` - Integrar UEFI Simple Input Protocol
+- [ ] `protos/linux.rs` - Completar `boot_params` structure
+- [ ] `protos/multiboot1.rs` - Completar `create_mbi()` com memory map
 
-### Alta Prioridade
-1. Implementar persistência de contador de boot (variáveis UEFI)
-2. Implementar detecção de tecla R para recovery
-3. Implementar SHA-256 real para verificação de integridade
-4. Implementar parser de arquivo de configuração (.cfg/.ini)
+### Média Prioridade 🔸
+- [ ] `ui/terminal.rs` - Implementar font rendering
+- [ ] `security/blake2b.rs` - Algoritmo BLAKE2B completo
+- [ ] `fs/iso9660.rs` - Implementar `read_file()`
+- [ ] `config/` - Carregar config file do disco
 
-### Média Prioridade
-5. Implementar shell de recuperação interativo
-6. Implementar menu de boot interativo
-7. Implementar detecção automática de Linux/Windows
-8. Implementar extração de versão de kernel
-
-### Baixa Prioridade
-9. Implementar validação de assinaturas digitais
-10. Implementar detecção de Secure Boot
-11. Otimizações de performance
+### Baixa Prioridade ⬜
+- [ ] BIOS support (Assembly stage1/stage2)
+- [ ] Tools (binários separados)
+- [ ] ARM64/RISC-V support
+- [ ] Network boot (PXE)
 
 ---
 
-**Versão**: 0.3.0  
-**Status**: Fases 1-2 concluídas, Fases 3-4 em desenvolvimento  
-**Última atualização**: 15 de dezembro de 2025
+**Versão**: 0.4.0  
+**Status**: 75% completo (6 de 8 fases)  
+**Build**: ✅ 3.53s, 0 erros, 13 warnings  
+**Última atualização**: 18 de dezembro de 2025

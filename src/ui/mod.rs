@@ -1,7 +1,12 @@
-//! Módulo de interface de usuário
+//! User Interface System
 //!
-//! Menu de boot e interfaces interativas
+//! Interactive boot menu, terminal, and graphics
 
-pub mod boot_menu;
+pub mod editor;
+pub mod input;
+pub mod menu;
+pub mod terminal;
+pub mod theme;
 
-pub use boot_menu::BootMenu;
+pub use menu::BootMenu;
+pub use terminal::GraphicalTerminal;

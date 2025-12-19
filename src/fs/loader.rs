@@ -1,14 +1,21 @@
 //! Carregador de arquivos do sistema de arquivos UEFI
 
-use crate::error::{BootError, FileSystemError, Result};
-use crate::memory::MemoryAllocator;
-use crate::types::LoadedFile;
-use uefi::prelude::*;
-use uefi::proto::media::file::{Directory, File, FileAttribute, FileInfo, FileMode};
+extern crate alloc;
+
+use uefi::{
+    prelude::*,
+    proto::media::file::{Directory, File, FileAttribute, FileInfo, FileMode},
+};
+
+use crate::{
+    error::{BootError, FileSystemError, Result},
+    memory::MemoryAllocator,
+    types::LoadedFile,
+};
 
 /// Carregador de arquivos UEFI
 pub struct FileLoader<'a> {
-    root: Directory,
+    root:      Directory,
     allocator: &'a MemoryAllocator<'a>,
 }
 
@@ -37,25 +44,48 @@ impl<'a> FileLoader<'a> {
     /// Carrega um arquivo na memória
     ///
     /// # Argumentos
-    /// * `filename` - Nome do arquivo a carregar
+    /// * `filename` - Nome do arquivo a carregar (aceita qualquer &str)
     ///
     /// # Retorna
     /// Informações sobre o arquivo carregado (ponteiro e tamanho)
-    pub fn load_file(&mut self, filename: &'static str) -> Result<LoadedFile> {
+    pub fn load_file(&mut self, filename: &str) -> Result<LoadedFile> {
         log::info!("Carregando arquivo: {}", filename);
 
-        // Converter filename para CStr16
-        let filename_cstr = match filename {
-            "forge" => cstr16!("forge"),
-            "initfs" => cstr16!("initfs"),
-            _ => return Err(BootError::FileSystem(FileSystemError::InvalidPath)),
-        };
+        // Sanitizar caminho do arquivo
+        let mut path_str = alloc::string::String::from(filename);
+
+        // 1. Remover prefixo "boot():" se existir
+        if path_str.starts_with("boot():") {
+            path_str = alloc::string::String::from(&path_str[7..]);
+        }
+
+        // 2. Substituir / por \ (padrão UEFI)
+        path_str = path_str.replace('/', "\\");
+
+        // 3. Remover \ inicial se houver (muitos firmwares preferem caminhos relativos à raiz)
+        if path_str.starts_with('\\') {
+            path_str.remove(0);
+        }
+
+        log::info!("Caminho processado: '{}' -> '{}'", filename, path_str);
+
+        // Converter filename UTF-8 para UTF-16 (CStr16)
+        // UEFI usa UTF-16, então precisamos converter
+        use uefi::CStr16;
+
+        // Criar buffer UTF-16 no stack (256 u16s = 512 bytes)
+        let mut utf16_buf = [0u16; 256];
+        let filename_cstr = CStr16::from_str_with_buf(path_str.as_str(), &mut utf16_buf)
+            .map_err(|_| BootError::FileSystem(FileSystemError::InvalidPath))?;
 
         // Abrir arquivo
         let mut file = self
             .root
             .open(filename_cstr, FileMode::Read, FileAttribute::empty())
-            .map_err(|_| BootError::FileSystem(FileSystemError::FileNotFound(filename)))?
+            .map_err(|_| {
+                log::error!("Arquivo não encontrado: {}", filename);
+                BootError::FileSystem(FileSystemError::FileNotFound)
+            })?
             .into_regular_file()
             .ok_or(BootError::FileSystem(FileSystemError::NotRegularFile))?;
 
@@ -80,7 +110,7 @@ impl<'a> FileLoader<'a> {
         log::info!("Arquivo carregado em {:#x}", file_ptr);
 
         Ok(LoadedFile {
-            ptr: file_ptr,
+            ptr:  file_ptr,
             size: file_size,
         })
     }
@@ -89,10 +119,10 @@ impl<'a> FileLoader<'a> {
     ///
     /// # Argumentos
     /// * `filename` - Nome do arquivo a carregar
-    pub fn try_load_file(&mut self, filename: &'static str) -> Result<Option<LoadedFile>> {
+    pub fn try_load_file(&mut self, filename: &str) -> Result<Option<LoadedFile>> {
         match self.load_file(filename) {
             Ok(file) => Ok(Some(file)),
-            Err(BootError::FileSystem(FileSystemError::FileNotFound(_))) => Ok(None),
+            Err(BootError::FileSystem(FileSystemError::FileNotFound)) => Ok(None),
             Err(e) => Err(e),
         }
     }

@@ -3,6 +3,8 @@
 //! Detecta estado do Secure Boot e prepara para validação de assinaturas
 //! NOTA: Implementação completa é TODO - por enquanto apenas detecção
 
+use alloc::vec::Vec;
+
 use log::{info, warn};
 
 /// Estado do Secure Boot
