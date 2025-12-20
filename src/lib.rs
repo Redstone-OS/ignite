@@ -124,9 +124,16 @@ pub fn boot(image_handle: Handle, mut system_table: SystemTable<Boot>) -> ! {
     let kernel_data =
         unsafe { core::slice::from_raw_parts(kernel_file.ptr as *const u8, kernel_file.size) };
 
-    // 6. Carregar módulos (initrd, etc)
-    info!("Etapa 5/7: Carregando módulos...");
-    let modules = load_modules(&mut file_loader, &entry);
+    // 6. Carregar initramfs (ramdisk)
+    info!("Etapa 5/7: Carregando initramfs...");
+    let initramfs = load_initramfs(&mut file_loader);
+
+    // Converter para Vec para compatibilidade com código existente
+    let modules = if let Some(ramfs) = initramfs {
+        alloc::vec![ramfs]
+    } else {
+        alloc::vec![]
+    };
 
     // 7. Selecionar e usar protocolo apropriado
     let protocol_name = entry.protocol.as_str(); // Get &str from String
@@ -416,30 +423,24 @@ fn select_boot_entry(config: &config::types::BootConfig) -> usize {
     index
 }
 
-/// Carrega módulos (initrd, etc) para a entrada
-fn load_modules(
-    file_loader: &mut FileLoader,
-    entry: &config::types::MenuEntry,
-) -> alloc::vec::Vec<types::LoadedFile> {
-    use alloc::vec::Vec;
-
-    let mut modules = Vec::new();
-
-    for module in &entry.modules {
-        info!("Carregando módulo: {}", module.path);
-        match file_loader.load_file(&module.path) {
-            Ok(file) => {
-                info!("  Módulo carregado: {} bytes", file.size);
-                modules.push(file);
-            },
-            Err(e) => {
-                info!("  Aviso: falha ao carregar módulo: {:?}", e);
-                // Continua sem o módulo
-            },
-        }
+/// Carrega initramfs (ramdisk TAR) se existir
+fn load_initramfs(file_loader: &mut FileLoader) -> Option<types::LoadedFile> {
+    info!("Carregando initramfs...");
+    match file_loader.load_file("initramfs.tar") {
+        Ok(file) => {
+            info!(
+                "  InitRAMFS carregado: {} KB em {:#x}",
+                file.size / 1024,
+                file.ptr
+            );
+            Some(file)
+        },
+        Err(_) => {
+            info!("  Aviso: initramfs.tar não encontrado");
+            info!("  Sistema não terá rootfs inicial");
+            None
+        },
     }
-
-    modules
 }
 
 /// Usa o protocolo apropriado para preparar o boot
