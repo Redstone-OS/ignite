@@ -1,0 +1,109 @@
+# Ignite Bootloader Configuration
+# Este arquivo é OPCIONAL - se não existir, o bootloader usa configuracão padrão
+#
+# Documentação completa: docs/configuration.md
+
+# ═══════════════════════════════════════════════════
+# Configurações Globais
+# ═══════════════════════════════════════════════════
+
+# Tempo de espera antes de auto-boot (em segundos)
+# 0 = boot imediato, "no" = esperar indefinidamente
+timeout: 3
+
+# Entrada padrão para boot automático (1-based index)
+default_entry: 1
+
+# Modo quiet (suprime mensagens de boot)
+quiet: no
+
+# Habilitar output serial (útil para debug)
+serial: yes
+serial_baudrate: 115200
+
+# Modo verbose (mostra informações detalhadas)
+verbose: yes
+
+# ═══════════════════════════════════════════════════
+# Interface e Estética
+# ═══════════════════════════════════════════════════
+
+# Resolução da interface (opcional, usa resolução atual se omitido)
+# interface_resolution: 1920x1080
+
+# Texto de branding exibido no menu
+interface_branding: Ignite v0.4 - Redstone OS Bootloader
+
+# Papel de parede (opcional)
+# wallpaper: boot/wallpaper.bmp
+# wallpaper_style: centered  # opções: centered, stretched, tiled
+
+# Habilitar editor de configuração (tecla E)
+editor_enabled: yes
+
+# ═══════════════════════════════════════════════════
+# Macros Customizadas
+# ═══════════════════════════════════════════════════
+
+${OS_NAME}=Redstone
+${VERSION}=0.4.0
+${KERNEL_DIR}=boot
+
+# ═══════════════════════════════════════════════════
+# Entradas de Boot
+# ═══════════════════════════════════════════════════
+
+# Entrada principal do Redstone OS
+/Redstone OS ${VERSION}
+    comment: Boot padrão do Redstone OS
+    protocol: limine
+    kernel_path: ${KERNEL_DIR}/kernel
+    module_path: ${KERNEL_DIR}/initfs
+    cmdline: quiet splash
+
+# Opções avançadas (sub-entrada)
+//Debug Mode
+    comment: Boot com debug e logs verbosos
+    protocol: limine
+    kernel_path: ${KERNEL_DIR}/kernel
+    module_path: ${KERNEL_DIR}/initfs
+    cmdline: verbose debug loglevel=7
+
+//Safe Mode
+    comment: Boot em modo seguro (sem módulos)
+    protocol: limine
+    kernel_path: ${KERNEL_DIR}/kernel
+    cmdline: single nomodeset
+
+# Exemplo de entrada Linux (comentado)
+# /Arch Linux
+#     comment: Distribuição Linux Arch
+#     protocol: linux
+#     kernel_path: boot/vmlinuz-linux
+#     module_path: boot/initramfs-linux.img
+#     cmdline: root=/dev/nvme0n1p2 rw quiet
+
+# Exemplo de chainload para Windows (comentado)
+# /Windows 11
+#     comment: Chainload para Windows
+#     protocol: efi
+#     kernel_path: hdd(0:1):/EFI/Microsoft/Boot/bootmgfw.efi
+
+# ═══════════════════════════════════════════════════
+# Recursos Avançados
+# ═══════════════════════════════════════════════════
+
+# Path resolution suportado:
+#   boot():/path         - Partição de boot padrão
+#   boot(N):/path        - Partição de boot específica (N)
+#   hdd(D:P):/path       - Disk D, Partition P
+#   guid(XXXX):/path     - Por GUID da partição
+#   uuid(XXXX):/path     - Por UUID da partição
+#   fslabel(NAME):/path  - Por label do filesystem
+
+# Hash verification (segurança):
+#   kernel_path: boot/kernel#1a2b3c4d5e6f...  (hash BLAKE2B)
+
+# Compressão automática:
+#   Se existir boot/initfs.zst, será usado automaticamente
+#   Suporta: .zst (zstd)

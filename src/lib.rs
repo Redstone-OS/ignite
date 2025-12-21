@@ -34,6 +34,7 @@ static ALLOCATOR: bump_allocator::BumpAllocator = bump_allocator::BumpAllocator:
 
 pub mod boot_info;
 pub mod config;
+pub mod constants; // Constantes centralizadas
 pub mod elf;
 pub mod error;
 pub mod fs;
@@ -42,6 +43,7 @@ pub mod memory;
 pub mod protos;
 pub mod recovery;
 pub mod security;
+pub mod serial; // Wrapper de serial configurável
 pub mod types;
 pub mod ui;
 pub mod video;
@@ -157,7 +159,7 @@ pub fn boot(image_handle: Handle, mut system_table: SystemTable<Boot>) -> ! {
 
     // 3. Seleção de entrada (menu ou auto-boot)
     info!("Etapa 2/7: Selecionando entrada de boot...");
-    let selected_index = select_boot_entry(&config);
+    let selected_index = select_boot_entry(boot_services, &config);
     let entry = config.entries[selected_index].clone(); // Clone para evitar problemas de tempo de vida
 
     info!("Boot selecionado: {}", entry.name);
@@ -425,11 +427,13 @@ fn create_default_config() -> config::types::BootConfig {
 
     use config::types::{BootConfig, MenuEntry, WallpaperStyle};
 
+    use crate::constants::{boot::BOOT_DELAY_SECONDS, paths::*};
+
     let mut config = BootConfig {
-        timeout:              Some(0), // Boot imediato
+        timeout:              Some(BOOT_DELAY_SECONDS), // 3 segundos para permitir tecla M
         default_entry:        1,
         quiet:                false,
-        serial:               true,
+        serial:               true, // Serial ligado por padrão
         serial_baudrate:      115200,
         verbose:              true,
         interface_resolution: None,
@@ -441,10 +445,11 @@ fn create_default_config() -> config::types::BootConfig {
     };
 
     // Entrada padrão para Redstone OS
+    // Usa paths do módulo constants
     let entry = MenuEntry::new(
         String::from("Redstone OS (default)"),
         String::from("limine"),
-        String::from("boot():/forge"),
+        String::from(DEFAULT_KERNEL_PATH), // "boot/kernel"
     );
 
     config.entries.push(entry);
@@ -452,33 +457,80 @@ fn create_default_config() -> config::types::BootConfig {
 }
 
 /// Seleciona entrada de boot (menu ou auto-boot)
-fn select_boot_entry(config: &config::types::BootConfig) -> usize {
-    // Se timeout é 0 ou entries é 1, auto-boot na entrada padrão
-    if config.timeout == Some(0) || config.entries.len() == 1 {
+///
+/// Implementa lógica de seleção com suporte a:
+/// - Countdown com detecção de tecla M
+/// - Menu interativo se M pressionado
+/// - Auto-boot se timeout expirar
+///
+/// # Argumentos
+/// * `boot_services` - Serviços de boot UEFI
+/// * `config` - Configuração de boot
+///
+/// # Retorna
+/// Índice (0-based) da entrada selecionada
+fn select_boot_entry(boot_services: &BootServices, config: &config::types::BootConfig) -> usize {
+    use crate::ui::BootMenu;
+
+    // Se timeout é 0, boot imediato na entrada padrão
+    if config.timeout == Some(0) {
         let index = if config.default_entry > 0 && config.default_entry <= config.entries.len() {
             config.default_entry - 1 // Converter de 1-based para 0-based
         } else {
             0
         };
-        info!("Auto-boot (timeout=0 ou 1 entrada)");
+        info!("Auto-boot imediato (timeout=0)");
         return index;
     }
 
-    // TODO: Aqui deveria mostrar o menu interativo
-    // Por enquanto, apenas usa default_entry
-    info!("Menu desabilitado, usando entrada padrão");
-    let index = if config.default_entry > 0 && config.default_entry <= config.entries.len() {
-        config.default_entry - 1
+    // Se apenas 1 entrada, boot direto (sem menu)
+    if config.entries.len() == 1 {
+        info!("Apenas 1 entrada disponível, boot direto");
+        return 0;
+    }
+
+    // Countdown aguardando tecla M
+    let timeout = config.timeout.unwrap_or(3);
+    let show_menu = BootMenu::wait_for_trigger(boot_services, timeout);
+
+    if show_menu {
+        // Usuário pressionou M - mostrar menu interativo
+        let mut menu = BootMenu::new(boot_services, config);
+        menu.show()
     } else {
-        0
-    };
-    index
+        // Timeout expirou - usar entrada padrão
+        info!("Usando entrada padrão");
+        if config.default_entry > 0 && config.default_entry <= config.entries.len() {
+            config.default_entry - 1
+        } else {
+            0
+        }
+    }
 }
 
 /// Carrega initramfs (ramdisk TAR) se existir
+///
+/// Tenta carregar do caminho padrão (boot/initfs) definido nas constantes.
+/// Suporta arquivos comprimidos (.zst) se disponível.
 fn load_initramfs(file_loader: &mut FileLoader) -> Option<types::LoadedFile> {
+    use crate::constants::paths::DEFAULT_INITFS_PATH;
+
     info!("Carregando initramfs...");
-    match file_loader.load_file("initramfs.tar") {
+
+    // Tentar primeiro com compressão (.zst)
+    let path_compressed = alloc::format!("{}.zst", DEFAULT_INITFS_PATH);
+    if let Ok(file) = file_loader.load_file(&path_compressed) {
+        info!(
+            "  InitRAMFS comprimido carregado: {} KB em {:#x}",
+            file.size / 1024,
+            file.ptr
+        );
+        // TODO: Descomprimir aqui quando implementarmos suporte zstd
+        return Some(file);
+    }
+
+    // Tentar sem compressão
+    match file_loader.load_file(DEFAULT_INITFS_PATH) {
         Ok(file) => {
             info!(
                 "  InitRAMFS carregado: {} KB em {:#x}",
@@ -488,7 +540,7 @@ fn load_initramfs(file_loader: &mut FileLoader) -> Option<types::LoadedFile> {
             Some(file)
         },
         Err(_) => {
-            info!("  Aviso: initramfs.tar não encontrado");
+            info!("  Aviso: {} não encontrado", DEFAULT_INITFS_PATH);
             info!("  Sistema não terá rootfs inicial");
             None
         },

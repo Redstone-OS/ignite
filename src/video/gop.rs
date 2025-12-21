@@ -1,17 +1,22 @@
 //! Implementação de saída de vídeo usando GOP (Graphics Output Protocol)
 
-use crate::error::{BootError, Result, VideoError};
-use crate::types::Framebuffer;
-use crate::video::VideoOutput;
-use uefi::prelude::*;
-use uefi::proto::console::gop::GraphicsOutput;
-use uefi::table::boot::{OpenProtocolAttributes, OpenProtocolParams};
+use uefi::{
+    boot::{OpenProtocolAttributes, OpenProtocolParams},
+    prelude::*,
+    proto::console::gop::GraphicsOutput,
+};
+
+use crate::{
+    error::{BootError, Result, VideoError},
+    types::Framebuffer,
+    video::VideoOutput,
+};
 
 /// Saída de vídeo usando GOP
 pub struct GopVideoOutput<'a> {
     boot_services: &'a BootServices,
-    image_handle: Handle,
-    framebuffer: Option<Framebuffer>,
+    image_handle:  Handle,
+    framebuffer:   Option<Framebuffer>,
 }
 
 impl<'a> GopVideoOutput<'a> {
@@ -38,8 +43,8 @@ impl<'a> VideoOutput for GopVideoOutput<'a> {
             self.boot_services
                 .open_protocol::<GraphicsOutput>(
                     OpenProtocolParams {
-                        handle: gop_handle,
-                        agent: self.image_handle,
+                        handle:     gop_handle,
+                        agent:      self.image_handle,
                         controller: None,
                     },
                     OpenProtocolAttributes::GetProtocol,
@@ -53,11 +58,11 @@ impl<'a> VideoOutput for GopVideoOutput<'a> {
 
         // Criar estrutura Framebuffer
         let fb = Framebuffer {
-            ptr: frame_buffer.as_mut_ptr() as u64,
-            size: frame_buffer.size(),
+            ptr:                   frame_buffer.as_mut_ptr() as u64,
+            size:                  frame_buffer.size(),
             horizontal_resolution: mode_info.resolution().0,
-            vertical_resolution: mode_info.resolution().1,
-            stride: mode_info.stride(),
+            vertical_resolution:   mode_info.resolution().1,
+            stride:                mode_info.stride(),
         };
 
         self.framebuffer = Some(fb);
