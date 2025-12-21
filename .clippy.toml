@@ -3,21 +3,23 @@
 # Nível de warnings
 warn = ["clippy::all", "clippy::pedantic", "clippy::cargo"]
 
-# Permite alguns lints específicos que são comuns em código de sistema
+# Permite alguns lints específicos comuns em desenvolvimento de OS/Bare-metal
 allow = [
-    "clippy::missing_errors_doc",       # Documentação de erros pode ser implícita
-    "clippy::missing_panics_doc",       # Panics em bootloader são raros
-    "clippy::module_name_repetitions",  # Comum em módulos de sistema
-    "clippy::cast_possible_truncation", # Necessário para conversões de endereços
-    "clippy::cast_sign_loss",           # Comum em código de baixo nível
-    "clippy::cast_possible_wrap",       # Necessário para ponteiros
+    "clippy::missing_errors_doc",       # Documentação exaustiva de erros pode poluir código FFI
+    "clippy::missing_panics_doc",       # Panics controlados são esperados no main
+    "clippy::module_name_repetitions",  # Comum: uefi::table::system::SystemTable
+    "clippy::cast_possible_truncation", # Endereços u64 -> u32/usize são comuns
+    "clippy::cast_sign_loss",           # Casts de hardware
+    "clippy::cast_possible_wrap",       # Ponteiros aritméticos
+    "clippy::must_use_candidate",       # Em APIs fluentes de boot, às vezes ignoramos retornos
+    "clippy::multiple_crate_versions",  # Comum com dependências transitivas
 ]
 
-# Nega lints críticos
+# Nega lints críticos para segurança e estabilidade
 deny = [
-    "clippy::unwrap_used",   # Preferir expect com mensagem
-    "clippy::expect_used",   # Em produção, usar tratamento adequado
-    "clippy::panic",         # Evitar panics não documentados
-    "clippy::unimplemented", # Código incompleto
-    "clippy::todo",          # TODOs devem ser issues
+    "clippy::unwrap_used",                # Em bootloader, unwrap é proibido (use expect ou trate)
+    "clippy::expect_used",                # Em libs centrais, prefira propagar erros
+    "clippy::panic",                      # Panics diretos devem usar o módulo crate::panic
+    "clippy::undocumented_unsafe_blocks", # ESSENCIAL: Todo unsafe deve ter comentário // SAFETY:
+    "clippy::infinite_iter",              # Loops infinitos acidentais
 ]

@@ -8,6 +8,11 @@
 
 use core::fmt;
 
+// --- Re-exports Essenciais ---
+// Isso resolve o erro "unresolved import crate::uefi::base::Status".
+// Muitos módulos buscam Status/Result aqui por conveniência/legado.
+pub use super::status::{Result, Status};
+
 /// Handle UEFI - Um ponteiro opaco para um objeto gerido pelo firmware.
 /// Usado para referenciar imagens, dispositivos, protocolos, etc.
 #[repr(transparent)]

@@ -1,46 +1,71 @@
 //! Sistema Unificado de Erros
 //!
-//! Define o enum `BootError` que encapsula todas as falhas possíveis.
-//! Projetado para ser `no_std` e fornecer contexto suficiente para debug.
+//! Define a hierarquia de erros do bootloader.
+//! Projetado para ser `no_std`, exaustivo e fácil de converter.
 
 use core::fmt;
 
 /// Alias conveniente para Results do bootloader.
 pub type Result<T> = core::result::Result<T, BootError>;
 
-/// Categoria de falha no processo de boot.
+/// O erro principal que engloba todas as falhas possíveis no Bootloader.
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub enum BootError {
-    /// Erro vindo do Firmware UEFI (Status Code).
+    /// Erros originados do Firmware UEFI.
     Uefi(crate::uefi::Status),
 
-    /// Erro de Entrada/Saída (Disco, Arquivo não encontrado).
+    /// Erros de Entrada/Saída de baixo nível (Hardware/Device).
     Io(IoError),
 
-    /// Erro de Memória (OOM, Alinhamento, Paging).
+    /// Erros lógicos do Sistema de Arquivos (FAT32, RedstoneFS).
+    FileSystem(FileSystemError),
+
+    /// Erros de Gerenciamento de Memória (Alocação, Paging).
     Memory(MemoryError),
 
-    /// Erro no formato do Kernel (ELF inválido, Arch errada).
+    /// Erros de Parsing ou Loading de Executáveis (ELF, PE).
     Elf(ElfError),
 
-    /// Erro de Vídeo (GOP não suportado, Resolução inválida).
+    /// Erros do Subsistema de Vídeo (GOP).
     Video(VideoError),
 
-    /// Erro de Configuração (Parse, Valor inválido).
+    /// Erros de Configuração (Parser, Validação).
     Config(ConfigError),
 
-    /// Erro genérico ou pânico controlado.
+    /// Erro genérico para casos não categorizados (Stubs, TODOs).
+    Generic(&'static str),
+
+    /// Pânico controlado ou erro fatal.
     Panic(&'static str),
 }
 
+/// Erros de I/O de Dispositivo (Hardware).
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub enum IoError {
-    FileNotFound,
     DeviceError,
-    BufferTooSmall,
-    InvalidPath,
+    NotReady,
+    Timeout,
+    InvalidParameter,
 }
 
+/// Erros de Sistema de Arquivos (Lógicos).
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub enum FileSystemError {
+    FileNotFound,
+    InvalidPath,
+    ReadError,
+    WriteError,
+    SeekError,
+    VolumeOpenError,
+    InvalidSignature,
+    UnsupportedFsType,
+    InvalidSize,
+    NotRegularFile,
+    bufferTooSmall,
+    DeviceError, // Re-mapa de IO se necessário no contexto de FS
+}
+
+/// Erros de Memória.
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub enum MemoryError {
     AllocationFailed,
@@ -48,32 +73,52 @@ pub enum MemoryError {
     InvalidAlignment,
     TableUpdateFailed,
     HeapFull,
+    InvalidAddress,
+    InvalidSize,
+    OutOfMemory,
 }
 
+/// Erros de Executáveis (ELF/Kernel).
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub enum ElfError {
+    ParseError,
     InvalidMagic,
     InvalidArchitecture,
     InvalidEndianness,
-    ParseError,
+    InvalidMachine,
+    InvalidEntryPoint,
+    UnsupportedFileType,
+    NoLoadableSegments,
     SegmentMapFailed,
+    SegmentCopyError,
+    InvalidFormat,
 }
 
+/// Erros de Vídeo.
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub enum VideoError {
+    InitializationFailed,
     GopNotSupported,
     ModeSetFailed,
     ResolutionMismatch,
+    NoGopHandle,
+    OpenProtocolFailed,
+    GopOpenFailed,
+    UnsupportedMode,
 }
 
+/// Erros de Configuração.
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub enum ConfigError {
-    ParseFailed,
+    NotFound,
+    ParseError,  // Renomeado de ParseFailed para consistência
+    ParseFailed, // Mantido para compatibilidade se usado
     InvalidKey,
     ValueOutOfRange,
+    Invalid(&'static str), // Para mensagens customizadas
 }
 
-// Conversões Automáticas (Syntactic Sugar para uso com `?`)
+// --- Implementações de Conversão (Syntactic Sugar) ---
 
 impl From<crate::uefi::Status> for BootError {
     fn from(s: crate::uefi::Status) -> Self {
@@ -81,17 +126,87 @@ impl From<crate::uefi::Status> for BootError {
     }
 }
 
-// Implementação de Display para logs amigáveis
+impl From<IoError> for BootError {
+    fn from(e: IoError) -> Self {
+        BootError::Io(e)
+    }
+}
+
+impl From<FileSystemError> for BootError {
+    fn from(e: FileSystemError) -> Self {
+        BootError::FileSystem(e)
+    }
+}
+
+impl From<MemoryError> for BootError {
+    fn from(e: MemoryError) -> Self {
+        BootError::Memory(e)
+    }
+}
+
+impl From<ElfError> for BootError {
+    fn from(e: ElfError) -> Self {
+        BootError::Elf(e)
+    }
+}
+
+impl From<VideoError> for BootError {
+    fn from(e: VideoError) -> Self {
+        BootError::Video(e)
+    }
+}
+
+impl From<ConfigError> for BootError {
+    fn from(e: ConfigError) -> Self {
+        BootError::Config(e)
+    }
+}
+
+// --- Implementação de Display (Logs) ---
+
 impl fmt::Display for BootError {
     fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
         match self {
             BootError::Uefi(s) => write!(f, "UEFI Error: {:?}", s),
             BootError::Io(e) => write!(f, "IO Error: {:?}", e),
+            BootError::FileSystem(e) => write!(f, "FS Error: {:?}", e),
             BootError::Memory(e) => write!(f, "Memory Error: {:?}", e),
             BootError::Elf(e) => write!(f, "ELF Error: {:?}", e),
             BootError::Video(e) => write!(f, "Video Error: {:?}", e),
             BootError::Config(e) => write!(f, "Config Error: {:?}", e),
-            BootError::Panic(msg) => write!(f, "Critical Failure: {}", msg),
+            BootError::Generic(s) => write!(f, "Generic Error: {}", s),
+            BootError::Panic(s) => write!(f, "Panic: {}", s),
         }
+    }
+}
+
+// Display para sub-erros (simplificado para debug)
+impl fmt::Display for FileSystemError {
+    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
+        write!(f, "{:?}", self)
+    }
+}
+
+impl fmt::Display for MemoryError {
+    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
+        write!(f, "{:?}", self)
+    }
+}
+
+impl fmt::Display for ElfError {
+    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
+        write!(f, "{:?}", self)
+    }
+}
+
+impl fmt::Display for VideoError {
+    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
+        write!(f, "{:?}", self)
+    }
+}
+
+impl fmt::Display for ConfigError {
+    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
+        write!(f, "{:?}", self)
     }
 }

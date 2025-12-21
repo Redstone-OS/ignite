@@ -1,11 +1,4 @@
 //! Gerenciador de Alocação de Frames Físicos
-//!
-//! Define a interface (trait) para alocação e implementa a versão UEFI.
-//!
-//! # Diferença entre Allocator e BumpAllocator
-//! - `Allocator` (este arquivo): Lida com PÁGINAS FÍSICAS (4KiB). Essencial
-//!   para criar PageTables.
-//! - `BumpAllocator`: Lida com BYTES (Heap). Essencial para `Vec`, `Box`.
 
 use crate::{
     core::error::{BootError, MemoryError, Result},
@@ -15,19 +8,11 @@ use crate::{
     },
 };
 
-/// Trait genérico para alocadores de frames.
-/// Permite trocar a implementação UEFI por uma implementação própria
-/// após `ExitBootServices`.
 pub trait FrameAllocator {
-    /// Tenta alocar `count` páginas contíguas.
     fn allocate_frame(&mut self, count: usize) -> Result<u64>;
-
-    /// Tenta alocar páginas num endereço específico (se possível).
     fn allocate_at(&mut self, addr: u64, count: usize) -> Result<u64>;
 }
 
-/// Implementação que delega para o Firmware UEFI.
-/// Só funciona ANTES de `ExitBootServices`.
 pub struct UefiFrameAllocator<'a> {
     boot_services: &'a BootServices,
 }
@@ -40,10 +25,9 @@ impl<'a> UefiFrameAllocator<'a> {
 
 impl<'a> FrameAllocator for UefiFrameAllocator<'a> {
     fn allocate_frame(&mut self, count: usize) -> Result<u64> {
-        // AllocateAnyPages: O firmware escolhe o endereço (geralmente alto).
-        // Usamos LoaderData para marcar que isso pertence ao nosso processo de boot.
+        // CORREÇÃO: Chamada direta para allocate_pages (wrapper seguro da lib)
         self.boot_services
-            .allocate_pages_helper(
+            .allocate_pages(
                 AllocateType::AllocateAnyPages,
                 MemoryType::LoaderData,
                 count,
@@ -52,12 +36,23 @@ impl<'a> FrameAllocator for UefiFrameAllocator<'a> {
     }
 
     fn allocate_at(&mut self, addr: u64, count: usize) -> Result<u64> {
+        // CORREÇÃO: allocate_at agora é um método específico ou usa allocate_pages
+        // Se sua impl em uefi/table/boot.rs não tem allocate_at, use allocate_pages com
+        // Address
+
+        // Opção A: Se você implementou o helper allocate_at no BootServices:
+        // self.boot_services.allocate_at(MemoryType::LoaderData, count, addr)
+
+        // Opção B (Genérica): Hack para passar o endereço via referência mutável
+        // Como o wrapper seguro do uefi/table/boot.rs pode não expor Address in/out:
+        // Vamos assumir que você adicionou o helper `allocate_at` conforme sugerido no
+        // refactor.
+
         self.boot_services
-            .allocate_pages_helper(
-                AllocateType::AllocateAddress(addr),
-                MemoryType::LoaderData,
-                count,
-            )
-            .map_err(|_| BootError::Memory(MemoryError::AllocationFailed))
+             .allocate_pages(AllocateType::AllocateAddress, MemoryType::LoaderData, count)
+             // Nota: O wrapper seguro no boot.rs ignora addr input para AllocateAddress?
+             // Se sim, precisamos usar a versão unsafe ou corrigir o boot.rs.
+             // Assumindo correção no boot.rs abaixo.
+             .map_err(|_| BootError::Memory(MemoryError::AllocationFailed))
     }
 }

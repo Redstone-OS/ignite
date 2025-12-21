@@ -5,6 +5,7 @@
 
 pub mod dev;
 pub mod fat32;
+pub mod loader;
 pub mod path;
 pub mod redstonefs;
 pub mod uefi;
