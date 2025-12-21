@@ -81,7 +81,7 @@ impl<'a> BootProtocol for RedstoneProtocol<'a> {
         };
 
         // Construir BootInfo
-        // ... (preenchimento omitido para brevidade, igual ao anterior)
+        // TODO: Preencher BootInfo
 
         Ok(KernelLaunchInfo {
             entry_point:   loaded_kernel.entry_point,
