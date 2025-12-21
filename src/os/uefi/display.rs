@@ -1,4 +1,4 @@
-use uefi::{
+use crate::uefi::{
     Guid, Identify,
     proto::{Protocol, console::gop::GraphicsOutput},
 };

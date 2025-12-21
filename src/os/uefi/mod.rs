@@ -1,10 +1,12 @@
 use core::{cell::RefCell, convert::TryInto, mem, ptr, slice};
 
-use uefi::{
-    CString16, Identify,
-    proto::media::file::{File, FileInfo},
+use self::{
+    device::{device_path_to_string, disk_device_priority},
+    disk::DiskOrFileEfi,
+    display::{EdidActive, Output},
+    video_mode::VideoModeIter,
 };
-use uefi::{
+use crate::uefi::{
     Handle, Result, Status,
     proto::{
         Protocol,
@@ -21,17 +23,14 @@ use uefi::{
         boot::{AllocateType, MemoryType},
     },
 };
-use uefi::{print, println}; // Importar macros de I/O
-
-use self::{
-    device::{device_path_to_string, disk_device_priority},
-    disk::DiskOrFileEfi,
-    display::{EdidActive, Output},
-    video_mode::VideoModeIter,
-};
+use crate::uefi::{print, println}; // Importar macros de I/O
 use crate::{
     os::{Os, OsHwDesc, OsKey, OsVideoMode},
     redstonefs::{BLOCK_SIZE, Disk, FileSystem, RECORD_SIZE},
+    uefi::{
+        CString16, Identify,
+        proto::media::file::{File, FileInfo},
+    },
 };
 
 mod acpi;
@@ -61,7 +60,7 @@ pub(crate) fn alloc_zeroed_page_aligned(size: usize) -> *mut u8 {
     let ptr = {
         // Endereço máximo mapeado pelo código de paginação em src/arch (8 GiB)
         let ptr = 0x2_0000_0000;
-        let mut st = unsafe { uefi::helpers::system_table() };
+        let mut st = unsafe { crate::uefi::helpers::system_table() };
         // uefi 0.28: boot_services() returns &BootServices
         // allocate_pages is a method on BootServices
         match st.boot_services().allocate_pages(
@@ -80,7 +79,8 @@ pub(crate) fn alloc_zeroed_page_aligned(size: usize) -> *mut u8 {
 }
 
 pub struct OsEfi {
-    pub st:  SystemTable<uefi::table::Boot>,
+    pub st: SystemTable,
+
     outputs: RefCell<Vec<(Output, Option<EdidActive>)>>,
 }
 
@@ -88,32 +88,32 @@ use alloc::vec::Vec;
 
 impl OsEfi {
     pub fn new() -> Self {
-        let mut sys_tab = unsafe { uefi::helpers::system_table() };
+        let mut sys_tab = unsafe { crate::uefi::helpers::system_table() };
         let mut outputs = Vec::<(Output, Option<EdidActive>)>::new();
         {
-            let guid = uefi::proto::console::gop::GraphicsOutput::GUID;
+            let guid = crate::uefi::proto::console::gop::GraphicsOutput::GUID;
 
             // Usar auxiliar locate_handle_buffer
             // uefi 0.28: locate_handle_buffer expects SearchType
             match sys_tab
                 .boot_services()
-                .locate_handle_buffer(uefi::table::boot::SearchType::ByProtocol(&guid))
+                .locate_handle_buffer(crate::uefi::table::boot::SearchType::ByProtocol(&guid))
             {
                 Ok(handles) => {
                     for handle in handles.iter() {
-                        let gop = match crate::os::uefi::device::get_protocol::<
-                            uefi::proto::console::gop::GraphicsOutput,
+                        let gop = match crate::os::crate::uefi::device::get_protocol::<
+                            crate::uefi::proto::console::gop::GraphicsOutput,
                         >(*handle)
                         {
                             Ok(g) => g,
                             Err(_) => continue,
                         };
 
-                        let edid = match crate::os::uefi::device::get_protocol::<
-                            crate::os::uefi::display::EdidActiveProtocol,
+                        let edid = match crate::os::crate::uefi::device::get_protocol::<
+                            crate::os::crate::uefi::display::EdidActiveProtocol,
                         >(*handle)
                         {
-                            Ok(p) => Some(crate::os::uefi::display::EdidActive(p)),
+                            Ok(p) => Some(crate::os::crate::uefi::display::EdidActive(p)),
                             Err(_) => None,
                         };
 
@@ -136,9 +136,12 @@ impl OsEfi {
         let boot_services = self.st.boot_services();
 
         // Get the LoadedImage protocol to find out which device we were loaded from
-        let loaded_image_ref = boot_services
-            .open_protocol_exclusive::<uefi::proto::loaded_image::LoadedImage>(image_handle())
-            .expect("Falha ao obter protocolo LoadedImage");
+        let loaded_image_ref =
+            boot_services
+                .open_protocol_exclusive::<crate::uefi::proto::loaded_image::LoadedImage>(
+                    image_handle(),
+                )
+                .expect("Falha ao obter protocolo LoadedImage");
         let unsafe_loaded_image = &*loaded_image_ref;
         let device_handle = unsafe_loaded_image
             .device()
@@ -146,7 +149,9 @@ impl OsEfi {
 
         // Open the SimpleFileSystem protocol on that device
         let mut sfs_ref = boot_services
-            .open_protocol_exclusive::<uefi::proto::media::fs::SimpleFileSystem>(device_handle)
+            .open_protocol_exclusive::<crate::uefi::proto::media::fs::SimpleFileSystem>(
+                device_handle,
+            )
             .ok()?;
         let unsafe_sfs = &mut *sfs_ref;
 
@@ -160,14 +165,14 @@ impl OsEfi {
         let file_handle = root_dir
             .open(
                 &path_cstr,
-                uefi::proto::media::file::FileMode::Read,
-                uefi::proto::media::file::FileAttribute::empty(),
+                crate::uefi::proto::media::file::FileMode::Read,
+                crate::uefi::proto::media::file::FileAttribute::empty(),
             )
             .ok()?;
 
         // Convert to regular file
         let mut file = match file_handle.into_type().ok()? {
-            uefi::proto::media::file::FileType::Regular(f) => f,
+            crate::uefi::proto::media::file::FileType::Regular(f) => f,
             _ => return None,
         };
 
@@ -282,7 +287,7 @@ impl Os for OsEfi {
         let mut outputs = self.outputs.borrow_mut();
         let (output, _efi_edid_opt) = &mut outputs[output_i];
 
-        let st = uefi::table::system_table_boot().unwrap();
+        let st = crate::uefi::table::system_table_boot().unwrap();
         let bs = st.boot_services();
 
         let mode_obj = output
@@ -335,7 +340,7 @@ impl Os for OsEfi {
         // uefi 0.28: boot_services().wait_for_event(&[event])
         // stdin().wait_for_key_event() -> Event
 
-        let mut st = unsafe { uefi::helpers::system_table() };
+        let mut st = unsafe { crate::uefi::helpers::system_table() };
 
         loop {
             // Tenta ler
@@ -364,7 +369,7 @@ impl Os for OsEfi {
                         }
                     },
                     TextInputKey::Special(sc) => {
-                        use uefi::proto::console::text::ScanCode;
+                        use crate::uefi::proto::console::text::ScanCode;
                         match sc {
                             ScanCode::UP => OsKey::Up,
                             ScanCode::DOWN => OsKey::Down,
@@ -384,7 +389,7 @@ impl Os for OsEfi {
     }
 
     fn clear_text(&self) {
-        let mut st = uefi::table::system_table_boot().unwrap();
+        let mut st = crate::uefi::table::system_table_boot().unwrap();
         let _ = st.stdout().clear();
     }
 
@@ -394,7 +399,7 @@ impl Os for OsEfi {
     }
 
     fn set_text_position(&self, x: usize, y: usize) {
-        let mut st = uefi::table::system_table_boot().unwrap();
+        let mut st = crate::uefi::table::system_table_boot().unwrap();
         let _ = st.stdout().set_cursor_position(x, y);
     }
 
@@ -402,14 +407,14 @@ impl Os for OsEfi {
         let (fg, bg) = if highlight {
             // Black on LightGray
             (
-                uefi::proto::console::text::Color::Black,
-                uefi::proto::console::text::Color::LightGray,
+                crate::uefi::proto::console::text::Color::Black,
+                crate::uefi::proto::console::text::Color::LightGray,
             )
         } else {
             // LightGray on Black
             (
-                uefi::proto::console::text::Color::LightGray,
-                uefi::proto::console::text::Color::Black,
+                crate::uefi::proto::console::text::Color::LightGray,
+                crate::uefi::proto::console::text::Color::Black,
             )
         };
 
@@ -420,7 +425,7 @@ impl Os for OsEfi {
         let attr = (bg as usize) << 4 | (fg as usize);
 
         // We use global system table to get mutable stdout
-        let st = uefi::table::system_table_boot().unwrap();
+        let st = crate::uefi::table::system_table_boot().unwrap();
         // Cast attr to type expected by set_attribute if needed, likely usize
         // or Attribute newtype? If set_attribute takes strict type, we
         // might need unsafe transmute or find the constructor. Let's
@@ -434,7 +439,7 @@ impl Os for OsEfi {
         // Let's just pass attr and see error if type mismatch (previously error
         // was method not found). If method not found, maybe invalid
         // import? Text output protocol IS
-        // uefi::proto::console::text::Output. It definitely has
+        // crate::uefi::proto::console::text::Output. It definitely has
         // set_attribute or similar. let _ = st
         //    .stdout()
         //    .set_attribute(unsafe { core::mem::transmute(attr) });
@@ -446,36 +451,47 @@ impl Os for OsEfi {
     }
 }
 
-fn status_to_result(status: Status) -> uefi::Result<usize> {
+fn status_to_result(status: Status) -> crate::uefi::Result<usize> {
     match status {
         Status::SUCCESS => Ok(0),
-        err => Err(uefi::Error::new(err, ())),
+        err => Err(err),
     }
 }
 
 // remover set_max_mode se tratado
 
-#[uefi::entry]
-fn main(image: Handle, mut st: SystemTable<uefi::table::Boot>) -> Status {
+#[no_mangle]
+pub extern "efiapi" fn efi_main(
+    image: Handle,
+    mut st: SystemTable<crate::uefi::table::Boot>,
+) -> Status {
     unsafe {
         IMAGE_HANDLE = Some(image);
-    }
-
-    unsafe {
-        uefi::helpers::init().unwrap();
+        // Initialize helpers with raw pointer to system table because
+        // helpers::system_table returns by value/copy We need to ensure we
+        // don't drop the original if it owns resources (unlikely for pure pointer
+        // wrapper)
+        crate::uefi::helpers::set_system_table(&mut st as *mut _, image);
     }
 
     // Desabilitar Watchdog
+    // uefi 0.28: boot_services().set_watchdog_timer(...)
     let _ = st.boot_services().set_watchdog_timer(0, 0x10000, None);
 
     // Chamar Main da Arquitetura
     if let Err(err) = arch::main() {
-        panic!("App error: {:?}", err);
+        // panic!("App error: {:?}", err);
+        // Prevent panic loop or complex printing if panic handler relies on
+        // UEFI
     }
 
     // Resetar Sistema
-    st.runtime_services()
-        .reset(uefi::table::runtime::ResetType::COLD, Status::SUCCESS, None);
+    st.runtime_services().reset(
+        crate::uefi::table::runtime::ResetType::COLD,
+        Status::SUCCESS,
+        None,
+    );
+    Status::SUCCESS
 }
 
 impl OsEfi {

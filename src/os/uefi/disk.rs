@@ -2,7 +2,8 @@ use alloc::vec::Vec;
 use core::slice;
 
 use syscall::{EINVAL, EIO, Error, Result};
-use uefi::{
+use crate::uefi::{
+
     Guid,
     proto::{Protocol, media::block::BlockIO as UefiBlockIo},
 };

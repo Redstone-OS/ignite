@@ -1,20 +1,21 @@
 use alloc::{string::String, vec, vec::Vec};
 use core::{fmt::Write, mem, slice};
 
-use uefi::{
-    Handle, Status,
-    proto::{
-        Protocol,
-        device_path::{DevicePath, DeviceSubType, DeviceType},
-        loaded_image::LoadedImage,
-        media::{
-            file::{File, FileAttribute, FileMode, FileType},
-            fs::SimpleFileSystem,
+use crate::{
+    fs::redstonefs::{BLOCK_SIZE, Disk, RECORD_SIZE},
+    uefi::{
+        Handle, Status,
+        proto::{
+            Protocol,
+            device_path::{DevicePath, DeviceSubType, DeviceType},
+            loaded_image::LoadedImage,
+            media::{
+                file::{File, FileAttribute, FileMode, FileType},
+                fs::SimpleFileSystem,
+            },
         },
     },
 };
-
-use crate::fs::redstonefs::{BLOCK_SIZE, Disk, RECORD_SIZE};
 
 // Standard GetProtocol wrapper
 pub fn get_protocol<P: Protocol>(handle: Handle) -> uefi::Result<&'static mut P> {

@@ -1,6 +1,5 @@
 use core::{arch::asm, mem};
 
-use uefi::Result;
 use x86_64::{
     PhysAddr,
     registers::{
@@ -11,7 +10,7 @@ use x86_64::{
 };
 
 use super::super::{OsEfi, memory_map::memory_map};
-use crate::{KernelArgs, logger::LOGGER};
+use crate::{KernelArgs, logger::LOGGER, uefi::Result};
 
 unsafe extern "C" fn kernel_entry(
     page_phys: usize,

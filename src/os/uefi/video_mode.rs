@@ -1,9 +1,11 @@
 use core::ptr;
 
 use log::error;
-use uefi::Status;
 
-use crate::os::{OsVideoMode, uefi::display::Output};
+use crate::{
+    os::{OsVideoMode, uefi::display::Output},
+    uefi::Status,
+};
 
 pub struct VideoModeIter {
     output_opt: Option<Output>,

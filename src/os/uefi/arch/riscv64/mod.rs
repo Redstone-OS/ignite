@@ -1,11 +1,12 @@
-use crate::KernelArgs;
-use crate::arch::PHYS_OFFSET;
-use crate::logger::LOGGER;
-use crate::os::OsEfi;
-use crate::os::uefi::memory_map::memory_map;
-use core::arch::asm;
-use core::mem;
-use uefi::status::Result;
+use core::{arch::asm, mem};
+
+use crate::{
+    KernelArgs,
+    arch::PHYS_OFFSET,
+    logger::LOGGER,
+    os::{OsEfi, uefi::memory_map::memory_map},
+    uefi::Result,
+};
 
 mod boot_protocol;
 mod coff_helper;

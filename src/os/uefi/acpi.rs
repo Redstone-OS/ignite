@@ -1,6 +1,7 @@
 use core::slice;
 
-use uefi::Guid;
+use crate::uefi::Guid;
+
 pub const ACPI_20_TABLE_GUID: Guid = uefi::table::cfg::ACPI2_GUID; // Checar se correto, 0.28 provavelmente tem isso em table::cfg
 pub const ACPI_TABLE_GUID: Guid = uefi::table::cfg::ACPI_GUID;
 

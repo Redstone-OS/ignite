@@ -1,6 +1,7 @@
-use uefi::{mem::memory_map::MemoryMap, table::boot::MemoryType};
-
-use crate::os::{OsMemoryEntry, OsMemoryKind};
+use crate::{
+    os::{OsMemoryEntry, OsMemoryKind},
+    uefi::{mem::memory_map::MemoryMap, table::boot::MemoryType},
+};
 
 pub struct MemoryMapIter {
     entries: alloc::vec::Vec<OsMemoryEntry>,
