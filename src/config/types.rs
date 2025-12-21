@@ -3,38 +3,49 @@
 //! Define as estruturas de dados que representam o estado configurado do
 //! sistema.
 
-use alloc::{string::String, vec::Vec};
+use alloc::{
+    string::{String, ToString},
+    vec,
+    vec::Vec,
+};
 
 /// Configuração global do Bootloader.
 #[derive(Debug, Clone)]
 pub struct BootConfig {
-    /// Tempo em segundos antes de iniciar a entrada padrão (None = esperar para
-    /// sempre).
+    /// Tempo em segundos antes de iniciar a entrada padrão.
     pub timeout: Option<u32>,
 
-    /// Índice da entrada padrão (0-based internamente, mas config pode ser
-    /// 1-based).
+    /// Índice da entrada padrão.
     pub default_entry_idx: usize,
 
-    /// Se verdadeiro, não imprime mensagens de log na tela (exceto erros
-    /// críticos).
+    /// Se verdadeiro, suprime logs não críticos.
     pub quiet: bool,
 
-    /// Se verdadeiro, envia logs para a porta serial.
+    /// Habilita saída serial.
     pub serial_enabled: bool,
 
-    /// Configuração de resolução de vídeo (Largura, Altura).
+    /// Resolução desejada.
     pub resolution: Option<(u32, u32)>,
 
-    /// Caminho para imagem de fundo.
+    /// Caminho do wallpaper.
     pub wallpaper: Option<String>,
 
-    /// Lista de entradas de sistemas operacionais.
+    /// Lista de sistemas operacionais.
     pub entries: Vec<Entry>,
 }
 
 impl Default for BootConfig {
     fn default() -> Self {
+        // Cria uma entrada de recuperação padrão caso não haja config no disco
+        let rescue_entry = Entry {
+            name:     "UEFI Shell (Rescue)".to_string(),
+            protocol: Protocol::EfiChainload,
+            path:     "boot():/efi/boot/shellx64.efi".to_string(),
+            cmdline:  None,
+            modules:  Vec::new(),
+            dtb_path: None,
+        };
+
         Self {
             timeout:           Some(5),
             default_entry_idx: 0,
@@ -42,53 +53,37 @@ impl Default for BootConfig {
             serial_enabled:    true,
             resolution:        None,
             wallpaper:         None,
-            entries:           Vec::new(),
+            // Importante: Inicializa com pelo menos uma entrada para evitar pânico no menu
+            entries:           vec![rescue_entry],
         }
     }
 }
 
-/// Uma entrada no menu de boot (OS ou Ferramenta).
+/// Uma entrada no menu de boot.
 #[derive(Debug, Clone)]
 pub struct Entry {
-    /// Nome exibido no menu.
-    pub name: String,
-
-    /// Protocolo de boot a ser usado.
+    pub name:     String,
     pub protocol: Protocol,
-
-    /// Caminho para o executável (Kernel, EFI, etc).
-    /// Suporta sintaxe de recurso: `boot(1):/kernel`.
-    pub path: String,
-
-    /// Argumentos de linha de comando para o kernel.
-    pub cmdline: Option<String>,
-
-    /// Módulos adicionais (InitRD, Drivers, etc).
-    pub modules: Vec<Module>,
-
-    /// Caminho para Device Tree Blob (ARM/RISC-V) ou sobreposição.
+    pub path:     String,
+    pub cmdline:  Option<String>,
+    pub modules:  Vec<Module>,
     pub dtb_path: Option<String>,
 }
 
-/// Módulo carregável (ex: Initramfs).
+/// Módulo carregável (InitRD, Drivers).
 #[derive(Debug, Clone)]
 pub struct Module {
     pub path:    String,
     pub cmdline: Option<String>,
 }
 
-/// Protocolos de Boot suportados.
+/// Protocolos suportados.
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub enum Protocol {
-    /// Protocolo Linux Boot (Carrega bzImage/vmlinuz + Initrd).
     Linux,
-    /// Protocolo Limine (Moderno, flexível).
     Limine,
-    /// Chainload de outro executável EFI (ex: Windows Boot Manager).
     EfiChainload,
-    /// Multiboot 2 (Compatibilidade legado).
     Multiboot2,
-    /// Desconhecido/Inválido.
     Unknown,
 }
 
