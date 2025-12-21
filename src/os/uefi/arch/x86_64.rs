@@ -20,14 +20,15 @@ unsafe extern "C" fn kernel_entry(
     args: *const KernelArgs,
 ) -> ! {
     unsafe {
-        // uefi_services::println!("[DEBUG] kernel_entry: Saindo de Boot Services...");
+        // Debug 1: Início de kernel_entry
+        let port: u16 = 0x3F8;
+        for &byte in b"[1/10] kernel_entry START\r\n" {
+            core::arch::asm!("out dx, al", in("dx") port, in("al") byte);
+        }
 
-        // Debug ANTES de exit_boot_services
-        unsafe {
-            let port: u16 = 0x3F8;
-            for &byte in b"[PRE-EXIT-BS] Calling exit_boot_services...\r\n".iter() {
-                ::core::arch::asm!("out dx, al", in("dx") port, in("al") byte);
-            }
+        // Debug 2: Antes de exit_boot_services
+        for &byte in b"[2/10] PRE exit_boot_services\r\n" {
+            core::arch::asm!("out dx, al", in("dx") port, in("al") byte);
         }
 
         // Read memory map and exit boot services
@@ -46,11 +47,10 @@ unsafe extern "C" fn kernel_entry(
         // Qualquer tentativa de usar println aqui causara um travamento.
 
         // Debug via serial direta (sem UEFI)
-        unsafe {
-            let port: u16 = 0x3F8;
-            for &byte in b"[POST-BS] CR4...\r\n".iter() {
-                ::core::arch::asm!("out dx, al", in("dx") port, in("al") byte);
-            }
+        // Debug 6: Antes de CR4
+        let port: u16 = 0x3F8;
+        for &byte in b"[6/10] PRE CR4 write\r\n" {
+            core::arch::asm!("out dx, al", in("dx") port, in("al") byte);
         }
 
         // Enable FXSAVE/FXRSTOR, Page Global, Page Address Extension, and Page Size
@@ -62,11 +62,10 @@ unsafe extern "C" fn kernel_entry(
             | Cr4Flags::PAGE_SIZE_EXTENSION;
         Cr4::write(cr4);
 
-        unsafe {
-            let port: u16 = 0x3F8;
-            for &byte in b"[POST-BS] EFER...\r\n".iter() {
-                ::core::arch::asm!("out dx, al", in("dx") port, in("al") byte);
-            }
+        // Debug 4: Antes de EFER
+        let port: u16 = 0x3F8;
+        for &byte in b"[4/10] PRE EFER write\r\n" {
+            core::arch::asm!("out dx, al", in("dx") port, in("al") byte);
         }
 
         // Enable Long mode and NX bit
