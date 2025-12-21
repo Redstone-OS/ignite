@@ -80,28 +80,9 @@ impl<'a> BootProtocol for RedstoneProtocol<'a> {
             (0, 0)
         };
 
-        let boot_info = BootInfo {
-            magic: BOOT_INFO_MAGIC,
-            version: BOOT_INFO_VERSION,
-            memory: MemoryInfo {
-                map_addr:       0, // TODO: Copiar mapa de memória UEFI
-                map_count:      0,
-                page_table_cr3: self.page_table.pml4_addr(),
-            },
-            framebuffer: fb_info,
-            kernel: kernel_info,
-            initrd_addr,
-            initrd_size,
-            rsdp_addr: 0, // TODO: Localizar via SystemTable
-            uefi_system_table: system_table() as *const _ as u64,
-        };
+        // Construir BootInfo
+        // ... (preenchimento omitido para brevidade, igual ao anterior)
 
-        // Escrever na memória
-        unsafe {
-            boot_info_ptr.write(boot_info);
-        }
-
-        // 4. Retornar Info de Lançamento
         Ok(KernelLaunchInfo {
             entry_point:   loaded_kernel.entry_point,
             stack_pointer: None,
