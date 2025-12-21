@@ -1,178 +1,97 @@
-//! Sistema de erros centralizado do bootloader Ignite
+//! Sistema Unificado de Erros
 //!
-//! Este módulo define todos os tipos de erro que podem ocorrer durante o
-//! processo de boot, organizados por categoria (FileSystem, ELF, Memory, Video,
-//! etc.)
+//! Define o enum `BootError` que encapsula todas as falhas possíveis.
+//! Projetado para ser `no_std` e fornecer contexto suficiente para debug.
 
 use core::fmt;
 
-/// Tipo Result customizado para o bootloader
+/// Alias conveniente para Results do bootloader.
 pub type Result<T> = core::result::Result<T, BootError>;
 
-/// Erro principal do bootloader - engloba todos os tipos de erro possíveis
-#[derive(Debug)]
+/// Categoria de falha no processo de boot.
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub enum BootError {
-    /// Erros relacionados ao sistema de arquivos
-    FileSystem(FileSystemError),
-    /// Erros relacionados ao parsing/loading de ELF
-    Elf(ElfError),
-    /// Erros relacionados à alocação/gerenciamento de memória
+    /// Erro vindo do Firmware UEFI (Status Code).
+    Uefi(crate::uefi::Status),
+
+    /// Erro de Entrada/Saída (Disco, Arquivo não encontrado).
+    Io(IoError),
+
+    /// Erro de Memória (OOM, Alinhamento, Paging).
     Memory(MemoryError),
-    /// Erros relacionados à configuração de vídeo
+
+    /// Erro no formato do Kernel (ELF inválido, Arch errada).
+    Elf(ElfError),
+
+    /// Erro de Vídeo (GOP não suportado, Resolução inválida).
     Video(VideoError),
-    /// Erros relacionados à configuração
+
+    /// Erro de Configuração (Parse, Valor inválido).
     Config(ConfigError),
-    /// Erro genérico com mensagem
-    Generic(&'static str),
+
+    /// Erro genérico ou pânico controlado.
+    Panic(&'static str),
 }
 
-/// Erros de sistema de arquivos
-#[derive(Debug)]
-pub enum FileSystemError {
-    /// Arquivo não encontrado (nome do arquivo logado separadamente)
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub enum IoError {
     FileNotFound,
-    /// Erro ao ler arquivo
-    ReadError,
-    /// Caminho inválido
+    DeviceError,
+    BufferTooSmall,
     InvalidPath,
-    /// Erro ao abrir volume
-    VolumeOpenError,
-    /// Arquivo não é regular (é diretório, link, etc)
-    NotRegularFile,
 }
 
-/// Erros de parsing/loading ELF
-#[derive(Debug)]
-pub enum ElfError {
-    /// Erro ao parsear arquivo ELF
-    ParseError,
-    /// Formato ELF inválido
-    InvalidFormat,
-    /// Ponto de entrada inválido (0x0)
-    InvalidEntryPoint,
-    /// Nenhum segmento PT_LOAD encontrado
-    NoLoadableSegments,
-    /// Erro ao copiar segmento
-    SegmentCopyError,
-}
-
-/// Erros de gerenciamento de memória
-#[derive(Debug)]
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub enum MemoryError {
-    /// Falha ao alocar páginas
     AllocationFailed,
-    /// Endereço inválido
-    InvalidAddress,
-    /// Tamanho inválido
-    InvalidSize,
-    /// Memória insuficiente
-    OutOfMemory,
+    FrameAllocationFailed,
+    InvalidAlignment,
+    TableUpdateFailed,
+    HeapFull,
 }
 
-/// Erros de configuração de vídeo
-#[derive(Debug)]
-pub enum VideoError {
-    /// Falha na inicialização
-    InitializationFailed,
-    /// Nenhum handle GOP encontrado
-    NoGopHandle,
-    /// Falha ao abrir protocolo GOP
-    OpenProtocolFailed,
-    /// Falha anterior - mantido por compatibilidade
-    GopOpenFailed,
-    /// Modo de vídeo não suportado
-    UnsupportedMode,
-}
-
-/// Erros de configuração
-#[derive(Debug)]
-pub enum ConfigError {
-    /// Arquivo de configuração não encontrado
-    NotFound,
-    /// Erro ao parsear configuração
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub enum ElfError {
+    InvalidMagic,
+    InvalidArchitecture,
+    InvalidEndianness,
     ParseError,
-    /// Configuração inválida
-    Invalid(&'static str),
+    SegmentMapFailed,
 }
 
-// Implementações de Display para mensagens de erro amigáveis
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub enum VideoError {
+    GopNotSupported,
+    ModeSetFailed,
+    ResolutionMismatch,
+}
 
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub enum ConfigError {
+    ParseFailed,
+    InvalidKey,
+    ValueOutOfRange,
+}
+
+// Conversões Automáticas (Syntactic Sugar para uso com `?`)
+
+impl From<crate::uefi::Status> for BootError {
+    fn from(s: crate::uefi::Status) -> Self {
+        BootError::Uefi(s)
+    }
+}
+
+// Implementação de Display para logs amigáveis
 impl fmt::Display for BootError {
-    fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
+    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
         match self {
-            BootError::FileSystem(e) => write!(f, "Erro de sistema de arquivos: {}", e),
-            BootError::Elf(e) => write!(f, "Erro de ELF: {}", e),
-            BootError::Memory(e) => write!(f, "Erro de memória: {}", e),
-            BootError::Video(e) => write!(f, "Erro de vídeo: {}", e),
-            BootError::Config(e) => write!(f, "Erro de configuração: {}", e),
-            BootError::Generic(msg) => write!(f, "Erro: {}", msg),
+            BootError::Uefi(s) => write!(f, "UEFI Error: {:?}", s),
+            BootError::Io(e) => write!(f, "IO Error: {:?}", e),
+            BootError::Memory(e) => write!(f, "Memory Error: {:?}", e),
+            BootError::Elf(e) => write!(f, "ELF Error: {:?}", e),
+            BootError::Video(e) => write!(f, "Video Error: {:?}", e),
+            BootError::Config(e) => write!(f, "Config Error: {:?}", e),
+            BootError::Panic(msg) => write!(f, "Critical Failure: {}", msg),
         }
-    }
-}
-
-impl fmt::Display for FileSystemError {
-    fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
-        match self {
-            FileSystemError::FileNotFound => write!(f, "Arquivo não encontrado"),
-            FileSystemError::ReadError => write!(f, "Erro ao ler arquivo"),
-            FileSystemError::InvalidPath => write!(f, "Caminho inválido"),
-            FileSystemError::VolumeOpenError => write!(f, "Erro ao abrir volume"),
-            FileSystemError::NotRegularFile => write!(f, "Não é um arquivo regular"),
-        }
-    }
-}
-
-impl fmt::Display for ElfError {
-    fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
-        match self {
-            ElfError::ParseError => write!(f, "Erro ao parsear arquivo ELF"),
-            ElfError::InvalidFormat => write!(f, "Formato ELF inválido"),
-            ElfError::InvalidEntryPoint => write!(f, "Ponto de entrada inválido (0x0)"),
-            ElfError::NoLoadableSegments => write!(f, "Nenhum segmento PT_LOAD encontrado"),
-            ElfError::SegmentCopyError => write!(f, "Erro ao copiar segmento"),
-        }
-    }
-}
-
-impl fmt::Display for MemoryError {
-    fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
-        match self {
-            MemoryError::AllocationFailed => write!(f, "Falha ao alocar memória"),
-            MemoryError::InvalidAddress => write!(f, "Endereço de memória inválido"),
-            MemoryError::InvalidSize => write!(f, "Tamanho de memória inválido"),
-            MemoryError::OutOfMemory => write!(f, "Memória insuficiente"),
-        }
-    }
-}
-
-impl fmt::Display for VideoError {
-    fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
-        match self {
-            VideoError::InitializationFailed => write!(f, "Falha ao inicializar vídeo"),
-            VideoError::NoGopHandle => write!(f, "Nenhum handle GOP encontrado"),
-            VideoError::OpenProtocolFailed => write!(f, "Falha ao abrir protocolo GOP"),
-            VideoError::GopOpenFailed => write!(f, "Falha ao abrir protocolo GOP"),
-            VideoError::UnsupportedMode => write!(f, "Modo de vídeo não suportado"),
-        }
-    }
-}
-
-impl fmt::Display for ConfigError {
-    fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
-        match self {
-            ConfigError::NotFound => write!(f, "Arquivo de configuração não encontrado"),
-            ConfigError::ParseError => write!(f, "Erro ao parsear configuração"),
-            ConfigError::Invalid(msg) => write!(f, "Configuração inválida: {}", msg),
-        }
-    }
-}
-
-// Conversões de erros externos para nossos tipos
-
-// uefi::Error conversion removido - não usamos mais uefi-rs externo
-
-impl From<goblin::error::Error> for BootError {
-    fn from(_: goblin::error::Error) -> Self {
-        BootError::Elf(ElfError::ParseError)
     }
 }

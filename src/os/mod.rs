@@ -1,100 +1,51 @@
-#[cfg(all(target_arch = "x86", target_os = "none"))]
-pub use self::bios::*;
-use crate::fs::redstonefs::Disk;
+//! Abstração de Sistema Operacional (Ambiente de Execução)
+//!
+//! Define a interface que o módulo `arch` usa para interagir com o ambiente
+//! subjacente (seja ele UEFI, BIOS ou Teste). Isso permite que o código de
+//! baixo nível (paginação, gdt) seja agnóstico em relação ao firmware.
 
-#[cfg(all(target_arch = "x86", target_os = "none"))]
-#[macro_use]
-mod bios;
-
-#[cfg(any(target_arch = "riscv64", target_os = "uefi"))]
-use alloc::vec::Vec;
-
-#[cfg(any(target_arch = "riscv64", target_os = "uefi"))]
-#[allow(unused_imports)]
-pub use self::uefi::*;
-
-#[cfg(any(target_arch = "riscv64", target_os = "uefi"))]
-#[macro_use]
-mod uefi;
-
-#[derive(Clone, Copy, Debug)]
-pub enum OsHwDesc {
-    Acpi(u64, u64),
-    DeviceTree(u64, u64),
-    NotFound,
-}
-
-#[derive(Clone, Copy, Debug)]
-pub enum OsKey {
-    Left,
-    Right,
-    Up,
-    Down,
-    Backspace,
-    Delete,
-    Enter,
-    Char(char),
-    Other,
-}
-
-// Manter sincronizado com BootloaderMemoryKind no kernel
-#[derive(Clone, Copy, Debug, Eq, PartialEq)]
-#[repr(u64)]
+/// Tipo de memória alocada pelo OS.
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub enum OsMemoryKind {
-    Null = 0,
-    Free = 1,
-    Reclaim = 2,
-    Reserved = 3,
+    /// Memória livre/usável.
+    Free,
+    /// Memória reservada pelo hardware ou firmware.
+    Reserved,
+    /// Memória reclamável (pode ser sobrescrita após o boot, ex: tabelas
+    /// temporárias).
+    Reclaim,
+    /// Código do Bootloader ou Kernel.
+    Code,
+    /// Dados do Bootloader ou Kernel.
+    Data,
 }
 
-// Manter sincronizado com BootloaderMemoryEntry no kernel
-#[derive(Clone, Copy, Debug)]
-#[repr(C, packed(8))]
+/// Uma entrada no mapa de memória do OS.
+#[derive(Debug, Clone, Copy)]
 pub struct OsMemoryEntry {
+    /// Endereço base físico.
     pub base: u64,
+    /// Tamanho em bytes.
     pub size: u64,
+    /// Tipo de memória.
     pub kind: OsMemoryKind,
 }
 
-#[derive(Clone, Copy, Debug)]
-pub struct OsVideoMode {
-    pub id:     u32,
-    pub width:  u32,
-    pub height: u32,
-    pub stride: u32,
-    pub base:   u64,
-}
-
+/// Interface que o ambiente deve implementar.
 pub trait Os {
-    type D: Disk;
-    type V: Iterator<Item = OsVideoMode>;
-
-    fn name(&self) -> &str;
-
+    /// Aloca memória contígua, alinhada a página (4KiB) e preenchida com zeros.
+    /// Retorna ponteiro físico ou null se falhar.
     fn alloc_zeroed_page_aligned(&self, size: usize) -> *mut u8;
 
-    #[allow(dead_code)]
-    fn page_size(&self) -> usize;
+    /// Mapeia memória (se o ambiente suportar paginação própria antes do
+    /// kernel). Em UEFI, geralmente é no-op pois usamos identity map.
+    fn map_memory(&self, phys: u64, virt: u64, size: u64, flags: u64);
 
-    fn filesystem(
-        &self,
-        password_opt: Option<&[u8]>,
-    ) -> syscall::Result<crate::fs::redstonefs::FileSystem<Self::D>>;
-
-    fn hwdesc(&self) -> OsHwDesc;
-
-    fn video_outputs(&self) -> usize;
-    fn video_modes(&self, output_i: usize) -> Self::V;
-    fn set_video_mode(&self, output_i: usize, mode: &mut OsVideoMode);
-    fn best_resolution(&self, output_i: usize) -> Option<(u32, u32)>;
-
-    fn get_key(&self) -> OsKey;
-
-    fn clear_text(&self);
-    fn get_text_position(&self) -> (usize, usize);
-    fn set_text_position(&self, x: usize, y: usize);
-    fn set_text_highlight(&self, highlight: bool);
-
-    /// Reads a file from the boot volume relative to the root.
-    fn read_file(&self, path: &str) -> Option<Vec<u8>>;
+    /// Registra uma região de memória usada.
+    /// Útil para o bootloader rastrear o que ele mesmo alocou.
+    fn add_memory_entry(&self, entry: OsMemoryEntry);
 }
+
+// Carrega a implementação UEFI se estivermos compilando para esse alvo.
+#[cfg(target_os = "uefi")]
+pub mod uefi;

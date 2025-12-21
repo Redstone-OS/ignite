@@ -1,19 +1,15 @@
-//! Core module - Fundamental utilities and types
+//! Núcleo do Bootloader (Core)
 //!
-//! This module contains essential bootloader components including:
-//! - Boot information structures
-//! - Constants and configuration
-//! - Error handling
-//! - Type definitions
-//! - Logging infrastructure
+//! Contém as definições fundamentais, tratamento de erros, configuração e
+//! estruturas de handoff para o kernel. Este módulo não deve depender de
+//! drivers específicos ou UEFI complexo.
 
-pub mod boot_info;
-pub mod constants;
+pub mod config;
 pub mod error;
-pub mod logger;
-pub mod types;
+pub mod handoff;
+pub mod logging;
 
-// Re-export commonly used items for convenience
-pub use boot_info::BootInfo;
+// Re-exports para facilitar o acesso
+pub use config::meta;
 pub use error::{BootError, Result};
-pub use types::*;
+pub use handoff::BootInfo;

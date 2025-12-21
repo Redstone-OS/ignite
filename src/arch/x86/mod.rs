@@ -1,33 +1,20 @@
-//! Módulo de arquitetura x86
+//! Implementação para Arquitetura x86_64
 //!
-//! Contém implementações para x86 (x32) e x86_64.
+//! Contém primitivas de I/O, controle de registradores e drivers básicos
+//! (Serial).
 
-use crate::os::Os;
+pub mod instructions;
+pub mod io;
+pub mod registers;
+pub mod serial;
 
-pub(crate) mod x32;
-pub(crate) mod x64;
+// Re-exports convenientes
+pub use instructions::{hlt, pause};
+pub use io::Port;
+pub use registers::{flush_tlb, read_cr3, write_cr3};
 
-pub unsafe fn paging_create(os: &impl Os, kernel_phys: u64, kernel_size: u64) -> Option<usize> {
-    unsafe {
-        if crate::KERNEL_64BIT {
-            x64::paging_create(os, kernel_phys, kernel_size)
-        } else {
-            x32::paging_create(os, kernel_phys, kernel_size)
-        }
-    }
-}
-
-pub unsafe fn paging_framebuffer(
-    os: &impl Os,
-    page_phys: usize,
-    framebuffer_phys: u64,
-    framebuffer_size: u64,
-) -> Option<u64> {
-    unsafe {
-        if crate::KERNEL_64BIT {
-            x64::paging_framebuffer(os, page_phys, framebuffer_phys, framebuffer_size)
-        } else {
-            x32::paging_framebuffer(os, page_phys, framebuffer_phys, framebuffer_size)
-        }
-    }
+/// Inicializa recursos específicos da arquitetura x86.
+pub fn init() {
+    // Inicializa a porta serial para logs
+    serial::init_serial_early();
 }

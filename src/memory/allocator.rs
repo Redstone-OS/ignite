@@ -1,6 +1,11 @@
-//! Alocador de memória para o bootloader
+//! Gerenciador de Alocação de Frames Físicos
 //!
-//! Wrapper em torno dos serviços de alocação UEFI
+//! Define a interface (trait) para alocação e implementa a versão UEFI.
+//!
+//! # Diferença entre Allocator e BumpAllocator
+//! - `Allocator` (este arquivo): Lida com PÁGINAS FÍSICAS (4KiB). Essencial
+//!   para criar PageTables.
+//! - `BumpAllocator`: Lida com BYTES (Heap). Essencial para `Vec`, `Box`.
 
 use crate::{
     core::error::{BootError, MemoryError, Result},
@@ -10,87 +15,49 @@ use crate::{
     },
 };
 
-/// Alocador de memória que usa serviços UEFI
-pub struct MemoryAllocator<'a> {
+/// Trait genérico para alocadores de frames.
+/// Permite trocar a implementação UEFI por uma implementação própria
+/// após `ExitBootServices`.
+pub trait FrameAllocator {
+    /// Tenta alocar `count` páginas contíguas.
+    fn allocate_frame(&mut self, count: usize) -> Result<u64>;
+
+    /// Tenta alocar páginas num endereço específico (se possível).
+    fn allocate_at(&mut self, addr: u64, count: usize) -> Result<u64>;
+}
+
+/// Implementação que delega para o Firmware UEFI.
+/// Só funciona ANTES de `ExitBootServices`.
+pub struct UefiFrameAllocator<'a> {
     boot_services: &'a BootServices,
 }
 
-impl<'a> MemoryAllocator<'a> {
-    /// Cria um novo alocador de memória
+impl<'a> UefiFrameAllocator<'a> {
     pub fn new(boot_services: &'a BootServices) -> Self {
         Self { boot_services }
     }
+}
 
-    /// Aloca páginas de memória
-    ///
-    /// # Argumentos
-    /// * `pages` - Número de páginas (4KB cada) a alocar
-    /// * `alloc_type` - Tipo de alocação (AnyPages, Address, MaxAddress)
-    ///
-    /// # Retorna
-    /// Endereço físico da memória alocada
-    pub fn allocate_pages(&self, pages: usize, alloc_type: AllocateType) -> Result<u64> {
-        unsafe {
-            self.boot_services
-                .allocate_pages_helper(alloc_type, MemoryType::LoaderData, pages)
-                .map_err(|_| BootError::Memory(MemoryError::AllocationFailed))
-        }
+impl<'a> FrameAllocator for UefiFrameAllocator<'a> {
+    fn allocate_frame(&mut self, count: usize) -> Result<u64> {
+        // AllocateAnyPages: O firmware escolhe o endereço (geralmente alto).
+        // Usamos LoaderData para marcar que isso pertence ao nosso processo de boot.
+        self.boot_services
+            .allocate_pages_helper(
+                AllocateType::AllocateAnyPages,
+                MemoryType::LoaderData,
+                count,
+            )
+            .map_err(|_| BootError::Memory(MemoryError::AllocationFailed))
     }
 
-    /// Aloca páginas em um endereço específico
-    ///
-    /// # Argumentos
-    /// * `address` - Endereço desejado
-    /// * `pages` - Número de páginas a alocar
-    pub fn allocate_at_address(&self, address: u64, pages: usize) -> Result<u64> {
-        // NOTA: AllocateAddress tenta alocar no endereço, mas UEFI pode alocar em outro
-        // lugar Para endereço específico garantido, precisaríamos de
-        // AllocateType::Address(address) mas nossa implementação atual não
-        // suporta isso
-        log::warn!("allocate_at_address: endereço {} não garantido", address);
-        self.allocate_pages(pages, AllocateType::AllocateAddress)
-    }
-
-    /// Aloca páginas em qualquer endereço disponível
-    ///
-    /// # Argumentos
-    /// * `pages` - Número de páginas a alocar
-    pub fn allocate_any(&self, pages: usize) -> Result<u64> {
-        self.allocate_pages(pages, AllocateType::AllocateAnyPages)
-    }
-
-    /// Libera páginas de memória
-    ///
-    /// # Argumentos
-    /// * `address` - Endereço da memória a liberar
-    /// * `pages` - Número de páginas a liberar
-    pub fn free_pages(&self, address: u64, pages: usize) -> Result<()> {
-        unsafe {
-            self.boot_services
-                .free_pages_helper(address, pages)
-                .map_err(|_| BootError::Memory(MemoryError::InvalidAddress))
-        }
-    }
-
-    /// Calcula número de páginas necessárias para um tamanho em bytes
-    ///
-    /// # Argumentos
-    /// * `size` - Tamanho em bytes
-    ///
-    /// # Retorna
-    /// Número de páginas (arredondado para cima)
-    pub fn pages_for_size(size: usize) -> usize {
-        (size + 0xFFF) / 0x1000
-    }
-
-    /// Zera uma região de memória
-    ///
-    /// # Argumentos
-    /// * `address` - Endereço da memória
-    /// * `size` - Tamanho em bytes
-    pub unsafe fn zero_memory(&self, address: u64, size: usize) {
-        unsafe {
-            core::ptr::write_bytes(address as *mut u8, 0, size);
-        }
+    fn allocate_at(&mut self, addr: u64, count: usize) -> Result<u64> {
+        self.boot_services
+            .allocate_pages_helper(
+                AllocateType::AllocateAddress(addr),
+                MemoryType::LoaderData,
+                count,
+            )
+            .map_err(|_| BootError::Memory(MemoryError::AllocationFailed))
     }
 }

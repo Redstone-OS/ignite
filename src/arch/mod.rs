@@ -1,22 +1,36 @@
-//! Módulos específicos de arquitetura
+//! Abstração de Arquitetura de Hardware
 //!
-//! Este módulo exporta definições de paginação e memória para diferentes
-//! arquiteturas (x86_64, AArch64, RISC-V 64).
+//! Este módulo exporta interfaces uniformes para manipulação de CPU, I/O e
+//! registradores específicos. O Bootloader seleciona a implementação correta
+//! em tempo de compilação.
 
-#[cfg(target_arch = "aarch64")]
-pub use self::aarch64::*;
-
-#[cfg(target_arch = "aarch64")]
-mod aarch64;
+// === x86_64 (AMD64) - Alvo Principal Atual ===
+#[cfg(any(target_arch = "x86", target_arch = "x86_64"))]
+pub mod x86;
 
 #[cfg(any(target_arch = "x86", target_arch = "x86_64"))]
-pub use self::x86::*;
+pub use x86::*;
 
-#[cfg(any(target_arch = "x86", target_arch = "x86_64"))]
-mod x86;
+// === AArch64 (ARM64) - Placeholder Futuro ===
+#[cfg(target_arch = "aarch64")]
+pub mod aarch64;
+
+#[cfg(target_arch = "aarch64")]
+pub use aarch64::*;
+
+// === RISC-V 64 - Placeholder Futuro ===
+#[cfg(target_arch = "riscv64")]
+pub mod riscv64;
 
 #[cfg(target_arch = "riscv64")]
-pub use self::riscv64::*;
+pub use riscv64::*;
 
-#[cfg(target_arch = "riscv64")]
-mod riscv64;
+/// Interface comum que todas as arquiteturas devem implementar (Traits).
+/// Garante que o Core possa chamar funções de arquitetura sem saber qual é.
+pub trait Architecture {
+    /// Inicializa a CPU/Arquitetura.
+    fn init();
+
+    /// Pausa a CPU (Halt) até a próxima interrupção.
+    fn hlt();
+}

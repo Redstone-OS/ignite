@@ -1,10 +1,6 @@
-//! Tabelas UEFI
-
+//! Glue Module para Tabelas UEFI
 pub mod boot;
-pub mod boot_helpers; // Helper methods for BootServices
+pub mod config;
+pub mod header;
 pub mod runtime;
 pub mod system;
-
-pub use boot::BootServices;
-pub use runtime::RuntimeServices;
-pub use system::SystemTable;

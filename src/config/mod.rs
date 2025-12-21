@@ -1,13 +1,14 @@
-//! Sistema de Configuração
+//! Subsistema de Configuração
 //!
-//! Analisa arquivos de configuração de boot (ignite.conf / boot.cfg)
+//! Gerencia o carregamento, parsing e interpretação das opções de boot.
 
+pub mod loader;
 pub mod macros;
 pub mod parser;
-pub mod paths;
+pub mod path;
 pub mod types;
-pub mod validator;
 
-pub use parser::ConfigParser;
-pub use paths::{Path, PathResource};
-pub use types::{BootConfig, MenuEntry, Module};
+// Re-exports principais
+pub use loader::load_configuration;
+pub use path::ConfigPath;
+pub use types::{BootConfig, Entry, Protocol};

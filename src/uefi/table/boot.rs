@@ -1,15 +1,20 @@
-//! EFI Boot Services Table
+//! Boot Services - Serviços de Inicialização
 //!
-//! Referência: UEFI Spec 2.10, Seção 7 - Services - Boot Services
+//! Contém as definições da tabela de serviços de boot e implementações seguras
+//! para alocação de memória, manipulação de protocolos e eventos.
 
-use super::system::TableHeader;
-use crate::uefi::base::*;
+use core::ffi::c_void;
 
-/// Memory Type
-///
-/// Spec: 7.2 - Memory Allocation Services
+use crate::uefi::{
+    Result,
+    base::{Char16, Event, Guid, Handle, Status},
+    table::header::TableHeader,
+};
+
+// --- Tipos de Enumeração ---
+
 #[repr(u32)]
-#[derive(Copy, Clone, Debug, PartialEq, Eq)]
+#[derive(Debug, Copy, Clone, PartialEq, Eq)]
 pub enum MemoryType {
     ReservedMemoryType = 0,
     LoaderCode = 1,
@@ -30,33 +35,44 @@ pub enum MemoryType {
     MaxMemoryType = 16,
 }
 
-// Aliases para compatibilidade com código existente
-impl MemoryType {
-    pub const CONVENTIONAL: Self = Self::ConventionalMemory;
-    pub const ACPI_RECLAIM: Self = Self::ACPIReclaimMemory;
-    pub const ACPI_NON_VOLATILE: Self = Self::ACPIMemoryNVS;
-}
-
-/// Allocate Type
-///
-/// Spec: 7.2 - Memory Allocation Services
 #[repr(u32)]
-#[derive(Copy, Clone, Debug)]
+#[derive(Debug, Copy, Clone)]
 pub enum AllocateType {
-    /// Alocar qualquer página disponível
     AllocateAnyPages = 0,
-    /// Alocar no endereço máximo especificado
     AllocateMaxAddress = 1,
-    /// Alocar no endereço específico
     AllocateAddress = 2,
     MaxAllocateType = 3,
 }
 
-/// Memory Descriptor
-///
-/// Spec: 7.2 - EFI_MEMORY_DESCRIPTOR
+#[repr(u32)]
+pub enum InterfaceType {
+    NativeInterface = 0,
+}
+
+#[repr(u32)]
+pub enum LocateSearchType {
+    AllHandles = 0,
+    ByRegisterNotify = 1,
+    ByProtocol = 2,
+}
+
+#[repr(u32)]
+pub enum TimerDelay {
+    TimerCancel = 0,
+    TimerPeriodic = 1,
+    TimerRelative = 2,
+}
+
+// Atributos para OpenProtocol
+pub const OPEN_PROTOCOL_BY_HANDLE_PROTOCOL: u32 = 0x00000001;
+pub const OPEN_PROTOCOL_GET_PROTOCOL: u32 = 0x00000002;
+pub const OPEN_PROTOCOL_TEST_PROTOCOL: u32 = 0x00000004;
+pub const OPEN_PROTOCOL_BY_CHILD_CONTROLLER: u32 = 0x00000008;
+pub const OPEN_PROTOCOL_BY_DRIVER: u32 = 0x00000010;
+pub const OPEN_PROTOCOL_EXCLUSIVE: u32 = 0x00000020;
+
 #[repr(C)]
-#[derive(Copy, Clone, Debug)]
+#[derive(Debug, Copy, Clone)]
 pub struct MemoryDescriptor {
     pub ty:              u32,
     pub physical_start:  u64,
@@ -65,257 +81,153 @@ pub struct MemoryDescriptor {
     pub attribute:       u64,
 }
 
-// Memory Attributes - Spec: 7.2
-pub const MEMORY_UC: u64 = 0x0000000000000001;
-pub const MEMORY_WC: u64 = 0x0000000000000002;
-pub const MEMORY_WT: u64 = 0x0000000000000004;
-pub const MEMORY_WB: u64 = 0x0000000000000008;
-pub const MEMORY_UCE: u64 = 0x0000000000000010;
-pub const MEMORY_WP: u64 = 0x0000000000001000;
-pub const MEMORY_RP: u64 = 0x0000000000002000;
-pub const MEMORY_XP: u64 = 0x0000000000004000;
-pub const MEMORY_NV: u64 = 0x0000000000008000;
-pub const MEMORY_MORE_RELIABLE: u64 = 0x0000000000010000;
-pub const MEMORY_RO: u64 = 0x0000000000020000;
-pub const MEMORY_SP: u64 = 0x0000000000040000;
-pub const MEMORY_CPU_CRYPTO: u64 = 0x0000000000080000;
-pub const MEMORY_RUNTIME: u64 = 0x8000000000000000;
+// --- Tabela BootServices (FFI) ---
 
-/// Task Priority Level (TPL)
-///
-/// Spec: 7.1 - Event, Timer, and Task Priority Services
-pub type Tpl = usize;
-
-pub const TPL_APPLICATION: Tpl = 4;
-pub const TPL_CALLBACK: Tpl = 8;
-pub const TPL_NOTIFY: Tpl = 16;
-pub const TPL_HIGH_LEVEL: Tpl = 31;
-
-/// Interface Type
-#[repr(u32)]
-pub enum InterfaceType {
-    NativeInterface = 0,
-}
-
-/// Locate Search Type
-#[repr(u32)]
-pub enum LocateSearchType {
-    AllHandles = 0,
-    ByRegisterNotify = 1,
-    ByProtocol = 2,
-}
-
-/// Open Protocol Attributes
-pub const OPEN_PROTOCOL_BY_HANDLE_PROTOCOL: u32 = 0x00000001;
-pub const OPEN_PROTOCOL_GET_PROTOCOL: u32 = 0x00000002;
-pub const OPEN_PROTOCOL_TEST_PROTOCOL: u32 = 0x00000004;
-pub const OPEN_PROTOCOL_BY_CHILD_CONTROLLER: u32 = 0x00000008;
-pub const OPEN_PROTOCOL_BY_DRIVER: u32 = 0x00000010;
-pub const OPEN_PROTOCOL_EXCLUSIVE: u32 = 0x00000020;
-
-/// EFI Boot Services Table
-///
-/// Spec: 4.4 - EFI Boot Services Table
 #[repr(C)]
 pub struct BootServices {
-    /// EFI Table Header
     pub hdr: TableHeader,
 
-    // ===== Task Priority Services (7.1) =====
-    pub raise_tpl:   extern "efiapi" fn(Tpl) -> Tpl,
-    pub restore_tpl: extern "efiapi" fn(Tpl),
+    // Task Priority Services (TPL)
+    pub raise_tpl:   extern "efiapi" fn(usize) -> usize,
+    pub restore_tpl: extern "efiapi" fn(usize),
 
-    // ===== Memory Services (7.2) =====
-    pub allocate_pages: extern "efiapi" fn(
-        AllocateType,
-        MemoryType,
-        usize,    // Pages
-        *mut u64, // Memory (in/out)
-    ) -> Status,
-
-    pub free_pages: extern "efiapi" fn(
-        u64,   // Memory
-        usize, // Pages
-    ) -> Status,
-
+    // Memory Services
+    pub allocate_pages: extern "efiapi" fn(AllocateType, MemoryType, usize, *mut u64) -> Status,
+    pub free_pages:     extern "efiapi" fn(u64, usize) -> Status,
     pub get_memory_map: extern "efiapi" fn(
-        *mut usize,            // MemoryMapSize (in/out)
-        *mut MemoryDescriptor, // MemoryMap
-        *mut usize,            // MapKey
-        *mut usize,            // DescriptorSize
-        *mut u32,              // DescriptorVersion
+        *mut usize,
+        *mut MemoryDescriptor,
+        *mut usize,
+        *mut usize,
+        *mut u32,
     ) -> Status,
+    pub allocate_pool:  extern "efiapi" fn(MemoryType, usize, *mut *mut u8) -> Status,
+    pub free_pool:      extern "efiapi" fn(*mut u8) -> Status,
 
-    pub allocate_pool: extern "efiapi" fn(
-        MemoryType,
-        usize,        // Size
-        *mut *mut u8, // Buffer
-    ) -> Status,
+    // Event & Timer Services
+    pub create_event:   extern "efiapi" fn(u32, usize, usize, *mut c_void, *mut Event) -> Status,
+    pub set_timer:      extern "efiapi" fn(Event, TimerDelay, u64) -> Status,
+    pub wait_for_event: extern "efiapi" fn(usize, *mut Event, *mut usize) -> Status,
+    pub signal_event:   extern "efiapi" fn(Event) -> Status,
+    pub close_event:    extern "efiapi" fn(Event) -> Status,
+    pub check_event:    extern "efiapi" fn(Event) -> Status,
 
-    pub free_pool: extern "efiapi" fn(*mut u8) -> Status,
-
-    // ===== Event & Timer Services (7.1) =====
-    pub create_event: extern "efiapi" fn(
-        u32,                    // Type
-        Tpl,                    // NotifyTpl
-        usize,                  // NotifyFunction
-        *mut core::ffi::c_void, // NotifyContext
-        *mut Event,             // Event
-    ) -> Status,
-
-    pub set_timer: extern "efiapi" fn(
-        Event,
-        u32, // Type
-        u64, // TriggerTime
-    ) -> Status,
-
-    pub wait_for_event: extern "efiapi" fn(
-        usize,      // NumberOfEvents
-        *mut Event, // Event
-        *mut usize, // Index
-    ) -> Status,
-
-    pub signal_event: extern "efiapi" fn(Event) -> Status,
-    pub close_event:  extern "efiapi" fn(Event) -> Status,
-    pub check_event:  extern "efiapi" fn(Event) -> Status,
-
-    // ===== Protocol Handler Services (7.3) =====
-    pub install_protocol_interface: extern "efiapi" fn(
-        *mut Handle,
-        *const Guid,
-        InterfaceType,
-        *mut core::ffi::c_void,
-    ) -> Status,
-
-    pub reinstall_protocol_interface: extern "efiapi" fn(
-        Handle,
-        *const Guid,
-        *mut core::ffi::c_void,
-        *mut core::ffi::c_void,
-    ) -> Status,
-
+    // Protocol Handler Services
+    pub install_protocol_interface:
+        extern "efiapi" fn(*mut Handle, *const Guid, InterfaceType, *mut c_void) -> Status,
+    pub reinstall_protocol_interface:
+        extern "efiapi" fn(Handle, *const Guid, *mut c_void, *mut c_void) -> Status,
     pub uninstall_protocol_interface:
-        extern "efiapi" fn(Handle, *const Guid, *mut core::ffi::c_void) -> Status,
-
-    pub handle_protocol:
-        extern "efiapi" fn(Handle, *const Guid, *mut *mut core::ffi::c_void) -> Status,
-
-    pub reserved: *mut core::ffi::c_void,
-
+        extern "efiapi" fn(Handle, *const Guid, *mut c_void) -> Status,
+    pub handle_protocol: extern "efiapi" fn(Handle, *const Guid, *mut *mut c_void) -> Status,
+    pub reserved:                     *mut c_void,
     pub register_protocol_notify:
-        extern "efiapi" fn(*const Guid, Event, *mut *mut core::ffi::c_void) -> Status,
-
+        extern "efiapi" fn(*const Guid, Event, *mut *mut c_void) -> Status,
     pub locate_handle: extern "efiapi" fn(
         LocateSearchType,
         *const Guid,
-        *mut core::ffi::c_void,
+        *mut c_void,
         *mut usize,
         *mut Handle,
     ) -> Status,
-
     pub locate_device_path:
-        extern "efiapi" fn(*const Guid, *mut *mut core::ffi::c_void, *mut Handle) -> Status,
+        extern "efiapi" fn(*const Guid, *mut *mut c_void, *mut Handle) -> Status,
+    pub install_configuration_table:  extern "efiapi" fn(*const Guid, *mut c_void) -> Status,
 
-    pub install_configuration_table:
-        extern "efiapi" fn(*const Guid, *mut core::ffi::c_void) -> Status,
+    // Image Services
+    pub load_image:
+        extern "efiapi" fn(u8, Handle, *mut c_void, *mut c_void, usize, *mut Handle) -> Status,
+    pub start_image:        extern "efiapi" fn(Handle, *mut usize, *mut *mut u16) -> Status,
+    pub exit:               extern "efiapi" fn(Handle, Status, usize, *mut u16) -> Status,
+    pub unload_image:       extern "efiapi" fn(Handle) -> Status,
+    pub exit_boot_services: extern "efiapi" fn(Handle, usize) -> Status,
 
-    // ===== Image Services (7.4) =====
-    pub load_image: extern "efiapi" fn(
-        Boolean,                // BootPolicy
-        Handle,                 // ParentImageHandle
-        *mut core::ffi::c_void, // DevicePath
-        *mut core::ffi::c_void, // SourceBuffer
-        usize,                  // SourceSize
-        *mut Handle,            // ImageHandle
-    ) -> Status,
-
-    pub start_image: extern "efiapi" fn(Handle, *mut usize, *mut *mut Char16) -> Status,
-
-    pub exit: extern "efiapi" fn(Handle, Status, usize, *mut Char16) -> Status,
-
-    pub unload_image: extern "efiapi" fn(Handle) -> Status,
-
-    pub exit_boot_services: extern "efiapi" fn(
-        Handle, // ImageHandle
-        usize,  // MapKey
-    ) -> Status,
-
-    // ===== Miscellaneous Services (7.5) =====
+    // Miscellaneous Services
     pub get_next_monotonic_count: extern "efiapi" fn(*mut u64) -> Status,
     pub stall:                    extern "efiapi" fn(usize) -> Status,
     pub set_watchdog_timer:       extern "efiapi" fn(usize, u64, usize, *const Char16) -> Status,
 
-    // ===== Driver Support Services (7.3) =====
-    pub connect_controller:
-        extern "efiapi" fn(Handle, *mut Handle, *mut core::ffi::c_void, Boolean) -> Status,
-
+    // Driver Support Services
+    pub connect_controller:    extern "efiapi" fn(Handle, *mut Handle, *mut c_void, u8) -> Status,
     pub disconnect_controller: extern "efiapi" fn(Handle, Handle, Handle) -> Status,
 
-    // ===== Open and Close Protocol Services (7.3) =====
-    pub open_protocol: extern "efiapi" fn(
-        Handle,                      // Handle
-        *const Guid,                 // Protocol
-        *mut *mut core::ffi::c_void, // Interface
-        Handle,                      // AgentHandle
-        Handle,                      // ControllerHandle
-        u32,                         // Attributes
-    ) -> Status,
-
+    // Open and Close Protocol Services
+    pub open_protocol:
+        extern "efiapi" fn(Handle, *const Guid, *mut *mut c_void, Handle, Handle, u32) -> Status,
     pub close_protocol: extern "efiapi" fn(Handle, *const Guid, Handle, Handle) -> Status,
-
     pub open_protocol_information:
-        extern "efiapi" fn(Handle, *const Guid, *mut *mut core::ffi::c_void, *mut usize) -> Status,
-
-    // ===== Library Services (7.3) =====
-    pub protocols_per_handle: extern "efiapi" fn(Handle, *mut *mut *mut Guid, *mut usize) -> Status,
-
-    pub locate_handle_buffer: extern "efiapi" fn(
-        LocateSearchType,
-        *const Guid,
-        *mut core::ffi::c_void,
-        *mut usize,
-        *mut *mut Handle,
-    ) -> Status,
-
-    pub locate_protocol: extern "efiapi" fn(
-        *const Guid,
-        *mut core::ffi::c_void,
-        *mut *mut core::ffi::c_void,
-    ) -> Status,
-
-    pub install_multiple_protocol_interfaces:   usize,
-    pub uninstall_multiple_protocol_interfaces: usize,
-
-    // ===== 32-bit CRC Services (7.5) =====
-    pub calculate_crc32: extern "efiapi" fn(*mut core::ffi::c_void, usize, *mut u32) -> Status,
-
-    // ===== Miscellaneous Services (7.5) =====
-    pub copy_mem: extern "efiapi" fn(*mut core::ffi::c_void, *const core::ffi::c_void, usize),
-
-    pub set_mem: extern "efiapi" fn(*mut core::ffi::c_void, usize, u8),
-
-    pub create_event_ex: extern "efiapi" fn(
-        u32,
-        Tpl,
-        usize,
-        *const core::ffi::c_void,
-        *const Guid,
-        *mut Event,
-    ) -> Status,
+        extern "efiapi" fn(Handle, *const Guid, *mut *mut c_void, *mut usize) -> Status,
 }
 
-/// Event Types - Spec: 7.1
-pub const EVT_TIMER: u32 = 0x80000000;
-pub const EVT_RUNTIME: u32 = 0x40000000;
-pub const EVT_NOTIFY_WAIT: u32 = 0x00000100;
-pub const EVT_NOTIFY_SIGNAL: u32 = 0x00000200;
-pub const EVT_SIGNAL_EXIT_BOOT_SERVICES: u32 = 0x00000201;
-pub const EVT_SIGNAL_VIRTUAL_ADDRESS_CHANGE: u32 = 0x60000202;
+// --- Métodos Seguros (Rust API) ---
 
-/// Timer Delay - Spec: 7.1
-#[repr(u32)]
-pub enum TimerDelay {
-    TimerCancel = 0,
-    TimerPeriodic = 1,
-    TimerRelative = 2,
+impl BootServices {
+    /// Aloca páginas de memória física.
+    pub fn allocate_pages(
+        &self,
+        ty: AllocateType,
+        memory_type: MemoryType,
+        pages: usize,
+    ) -> Result<u64> {
+        let mut addr = 0;
+        unsafe { (self.allocate_pages)(ty, memory_type, pages, &mut addr).to_result_with(addr) }
+    }
+
+    /// Aloca memória na heap do UEFI (Pool).
+    pub fn allocate_pool(&self, memory_type: MemoryType, size: usize) -> Result<*mut u8> {
+        let mut ptr = core::ptr::null_mut();
+        unsafe { (self.allocate_pool)(memory_type, size, &mut ptr).to_result_with(ptr) }
+    }
+
+    /// Libera memória da heap do UEFI.
+    pub fn free_pool(&self, ptr: *mut u8) -> Result<()> {
+        unsafe { (self.free_pool)(ptr).to_result() }
+    }
+
+    /// Localiza um protocolo no sistema (primeiro encontrado).
+    pub fn locate_protocol(&self, protocol_guid: &Guid) -> Result<*mut c_void> {
+        let mut interface = core::ptr::null_mut();
+        unsafe {
+            (self.locate_protocol)(protocol_guid, core::ptr::null_mut(), &mut interface)
+                .to_result_with(interface)
+        }
+    }
+
+    /// Abre um protocolo em um handle específico.
+    pub fn open_protocol(
+        &self,
+        handle: Handle,
+        protocol: &Guid,
+        agent: Handle,
+        controller: Handle,
+        attributes: u32,
+    ) -> Result<*mut c_void> {
+        let mut interface = core::ptr::null_mut();
+        unsafe {
+            (self.open_protocol)(
+                handle,
+                protocol,
+                &mut interface,
+                agent,
+                controller,
+                attributes,
+            )
+            .to_result_with(interface)
+        }
+    }
+
+    /// Define o Watchdog Timer. 0 desabilita.
+    pub fn set_watchdog_timer(&self, timeout_seconds: usize, watchdog_code: u64) -> Result<()> {
+        unsafe {
+            (self.set_watchdog_timer)(timeout_seconds, watchdog_code, 0, core::ptr::null())
+                .to_result()
+        }
+    }
+
+    /// Pausa a execução (Busy Wait).
+    pub fn stall(&self, microseconds: usize) {
+        unsafe {
+            let _ = (self.stall)(microseconds);
+        }
+    }
 }

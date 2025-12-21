@@ -1,152 +1,105 @@
-//! Tipos de Configuração
+//! Tipos de Configuração do Bootloader
 //!
-//! Estruturas de dados para configuração de boot
+//! Define as estruturas de dados que representam o estado configurado do
+//! sistema.
 
 use alloc::{string::String, vec::Vec};
 
-/// Configuração completa de boot
+/// Configuração global do Bootloader.
 #[derive(Debug, Clone)]
 pub struct BootConfig {
-    /// Timeout em segundos antes do auto-boot (None = sem timeout)
+    /// Tempo em segundos antes de iniciar a entrada padrão (None = esperar para
+    /// sempre).
     pub timeout: Option<u32>,
 
-    /// Índice da entrada padrão (1-based)
-    pub default_entry: usize,
+    /// Índice da entrada padrão (0-based internamente, mas config pode ser
+    /// 1-based).
+    pub default_entry_idx: usize,
 
-    /// Modo silencioso (suprimir saída)
+    /// Se verdadeiro, não imprime mensagens de log na tela (exceto erros
+    /// críticos).
     pub quiet: bool,
 
-    /// Habilitar saída serial
-    pub serial: bool,
+    /// Se verdadeiro, envia logs para a porta serial.
+    pub serial_enabled: bool,
 
-    /// Baudrate serial (Apenas BIOS)
-    pub serial_baudrate: u32,
+    /// Configuração de resolução de vídeo (Largura, Altura).
+    pub resolution: Option<(u32, u32)>,
 
-    /// Modo verboso
-    pub verbose: bool,
-
-    /// Resolução da interface (WxH)
-    pub interface_resolution: Option<(u32, u32)>,
-
-    /// Texto de branding da interface
-    pub interface_branding: Option<String>,
-
-    /// Caminho do wallpaper
+    /// Caminho para imagem de fundo.
     pub wallpaper: Option<String>,
 
-    /// Estilo do wallpaper: tiled, centered, stretched
-    pub wallpaper_style: WallpaperStyle,
-
-    /// Editor habilitado
-    pub editor_enabled: bool,
-
-    /// Entradas de menu
-    pub entries: Vec<MenuEntry>,
+    /// Lista de entradas de sistemas operacionais.
+    pub entries: Vec<Entry>,
 }
 
 impl Default for BootConfig {
     fn default() -> Self {
         Self {
-            timeout:              Some(5),
-            default_entry:        1,
-            quiet:                false,
-            serial:               false,
-            serial_baudrate:      115200,
-            verbose:              false,
-            interface_resolution: None,
-            interface_branding:   None,
-            wallpaper:            None,
-            wallpaper_style:      WallpaperStyle::Stretched,
-            editor_enabled:       true,
-            entries:              Vec::new(),
+            timeout:           Some(5),
+            default_entry_idx: 0,
+            quiet:             false,
+            serial_enabled:    true,
+            resolution:        None,
+            wallpaper:         None,
+            entries:           Vec::new(),
         }
     }
 }
 
-/// Entrada de menu
+/// Uma entrada no menu de boot (OS ou Ferramenta).
 #[derive(Debug, Clone)]
-pub struct MenuEntry {
-    /// Nome/título da entrada
+pub struct Entry {
+    /// Nome exibido no menu.
     pub name: String,
 
-    /// Comentário exibido quando selecionado
-    pub comment: Option<String>,
+    /// Protocolo de boot a ser usado.
+    pub protocol: Protocol,
 
-    /// Protocolo de boot: limine, linux, multiboot1, multiboot2, efi, bios
-    pub protocol: String,
-
-    /// Caminho do kernel/executável
-    pub kernel_path: String,
-
-    /// Argumentos de linha de comando
-    pub cmdline: Option<String>,
-
-    /// Módulos/initrd
-    pub modules: Vec<Module>,
-
-    /// Resolução de vídeo (WxHxBPP)
-    pub resolution: Option<(u32, u32, u32)>,
-
-    /// Modo texto (apenas BIOS)
-    pub textmode: bool,
-
-    /// Caminho do device tree blob
-    pub dtb_path: Option<String>,
-
-    /// KASLR habilitado
-    pub kaslr: bool,
-
-    /// Sub-entradas (para menus hierárquicos)
-    pub sub_entries: Vec<MenuEntry>,
-
-    /// Expandido por padrão
-    pub expanded: bool,
-}
-
-impl MenuEntry {
-    pub fn new(name: String, protocol: String, kernel_path: String) -> Self {
-        Self {
-            name,
-            comment: None,
-            protocol,
-            kernel_path,
-            cmdline: None,
-            modules: Vec::new(),
-            resolution: None,
-            textmode: false,
-            dtb_path: None,
-            kaslr: false,
-            sub_entries: Vec::new(),
-            expanded: false,
-        }
-    }
-}
-
-/// Módulo (initrd, ramdisk, etc.)
-#[derive(Debug, Clone)]
-pub struct Module {
-    /// Caminho do módulo
+    /// Caminho para o executável (Kernel, EFI, etc).
+    /// Suporta sintaxe de recurso: `boot(1):/kernel`.
     pub path: String,
 
-    /// Linha de comando / string do módulo
+    /// Argumentos de linha de comando para o kernel.
+    pub cmdline: Option<String>,
+
+    /// Módulos adicionais (InitRD, Drivers, etc).
+    pub modules: Vec<Module>,
+
+    /// Caminho para Device Tree Blob (ARM/RISC-V) ou sobreposição.
+    pub dtb_path: Option<String>,
+}
+
+/// Módulo carregável (ex: Initramfs).
+#[derive(Debug, Clone)]
+pub struct Module {
+    pub path:    String,
     pub cmdline: Option<String>,
 }
 
-/// Estilo de wallpaper
+/// Protocolos de Boot suportados.
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
-pub enum WallpaperStyle {
-    Tiled,
-    Centered,
-    Stretched,
+pub enum Protocol {
+    /// Protocolo Linux Boot (Carrega bzImage/vmlinuz + Initrd).
+    Linux,
+    /// Protocolo Limine (Moderno, flexível).
+    Limine,
+    /// Chainload de outro executável EFI (ex: Windows Boot Manager).
+    EfiChainload,
+    /// Multiboot 2 (Compatibilidade legado).
+    Multiboot2,
+    /// Desconhecido/Inválido.
+    Unknown,
 }
 
-impl WallpaperStyle {
-    pub fn from_str(s: &str) -> Option<Self> {
+impl From<&str> for Protocol {
+    fn from(s: &str) -> Self {
         match s.to_lowercase().as_str() {
-            "tiled" => Some(Self::Tiled),
-            "centered" => Some(Self::Centered),
-            "stretched" => Some(Self::Stretched),
-            _ => None,
+            "linux" => Protocol::Linux,
+            "limine" => Protocol::Limine,
+            "efi" | "chainload" => Protocol::EfiChainload,
+            "multiboot2" => Protocol::Multiboot2,
+            _ => Protocol::Unknown,
         }
     }
 }

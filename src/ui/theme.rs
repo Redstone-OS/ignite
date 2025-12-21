@@ -1,59 +1,28 @@
-//! Sistema de Temas
+//! Definições de Tema e Cores
+//!
+//! Padroniza a aparência da interface gráfica.
 
-/// Cor no formato RGB
+use crate::video::Color;
+
 #[derive(Debug, Clone, Copy)]
-pub struct Color {
-    pub r: u8,
-    pub g: u8,
-    pub b: u8,
-}
-
-impl Color {
-    pub const BLACK: Color = Color { r: 0, g: 0, b: 0 };
-    pub const WHITE: Color = Color {
-        r: 255,
-        g: 255,
-        b: 255,
-    };
-    pub const RED: Color = Color { r: 255, g: 0, b: 0 };
-    pub const GREEN: Color = Color { r: 0, g: 255, b: 0 };
-    pub const BLUE: Color = Color { r: 0, g: 0, b: 255 };
-    pub const CYAN: Color = Color {
-        r: 0,
-        g: 255,
-        b: 255,
-    };
-    pub const MAGENTA: Color = Color {
-        r: 255,
-        g: 0,
-        b: 255,
-    };
-    pub const YELLOW: Color = Color {
-        r: 255,
-        g: 255,
-        b: 0,
-    };
-}
-
-/// Tema de UI
 pub struct Theme {
-    pub background: Color,
-    pub foreground: Color,
-    pub selection:  Color,
-    pub comment:    Color,
+    pub background:  Color,
+    pub foreground:  Color,
+    pub highlight:   Color,
+    pub comment:     Color,
+    pub selected_bg: Color,
+    pub selected_fg: Color,
 }
 
 impl Default for Theme {
     fn default() -> Self {
         Self {
-            background: Color::BLACK,
-            foreground: Color::WHITE,
-            selection:  Color::CYAN,
-            comment:    Color {
-                r: 128,
-                g: 128,
-                b: 128,
-            },
+            background:  Color::new(30, 30, 46), // Dark Blue/Grey (Catppuccin base-ish)
+            foreground:  Color::new(205, 214, 244), // White-ish
+            highlight:   Color::new(137, 180, 250), // Blue
+            comment:     Color::new(108, 112, 134), // Grey
+            selected_bg: Color::new(49, 50, 68), // Surface0
+            selected_fg: Color::new(250, 179, 135), // Peach/Orange
         }
     }
 }

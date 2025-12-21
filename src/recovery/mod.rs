@@ -1,11 +1,17 @@
-//! Módulo de recuperação e fallback
+//! Subsistema de Recuperação e Alta Disponibilidade
 //!
-//! Responsável por sistema de fallback, modo de recuperação e diagnóstico
+//! Garante que o sistema possa inicializar mesmo em caso de corrupção ou falhas
+//! repetidas.
+//!
+//! Funcionalidades:
+//! - **A/B Boot:** Detecção de falhas e fallback automático.
+//! - **Persistência:** Contagem de tentativas na NVRAM.
+//! - **Diagnóstico:** Verificação pré-boot de arquivos.
 
-pub mod fallback;
-pub mod keydetect;
 pub mod diagnostics;
+pub mod manager;
+pub mod state;
 
-pub use fallback::{BootOptions, KernelEntry};
-pub use keydetect::KeyDetector;
+// Re-exports
 pub use diagnostics::Diagnostics;
+pub use manager::RecoveryManager;

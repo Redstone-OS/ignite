@@ -1,12 +1,14 @@
-//! Sistema de Interface de Usuário
+//! Interface de Usuário (UI)
 //!
-//! Menu de boot interativo, terminal e gráficos
+//! Gerencia a interação gráfica com o usuário, incluindo menu de boot,
+//! renderização de fontes e tratamento de entrada.
 
-pub mod editor;
+pub mod font;
+pub mod graphics;
 pub mod input;
 pub mod menu;
-pub mod terminal;
 pub mod theme;
 
-pub use menu::BootMenu;
-pub use terminal::GraphicalTerminal;
+// Re-exports
+pub use menu::Menu;
+pub use theme::Theme;

@@ -1,91 +1,43 @@
-//! Suporte a Tabelas ACPI
+//! Gerenciamento de ACPI (Advanced Configuration and Power Interface)
 //!
-//! Localiza e parseia tabelas ACPI (RSDP, RSDT, XSDT)
+//! Responsável por localizar a tabela RSDP (Root System Description Pointer)
+//! através das tabelas de configuração do UEFI. Esta é a "chave" que o Kernel
+//! precisa para descobrir quantos CPUs existem, controlar energia, etc.
 
-use core::mem;
+use crate::{
+    core::error::{BootError, Result},
+    uefi::{
+        system_table,
+        table::config::{ACPI_20_TABLE_GUID, ACPI_TABLE_GUID},
+    },
+};
 
-/// Estrutura RSDP (Root System Description Pointer)
-#[repr(C, packed)]
-#[derive(Debug, Copy, Clone)]
-pub struct Rsdp {
-    pub signature:    [u8; 8], // "RSD PTR "
-    pub checksum:     u8,
-    pub oem_id:       [u8; 6],
-    pub revision:     u8,
-    pub rsdt_address: u32,
-}
-
-/// RSDP Estendido para ACPI 2.0+
-#[repr(C, packed)]
-#[derive(Debug, Copy, Clone)]
-pub struct RsdpExtended {
-    pub rsdp:              Rsdp,
-    pub length:            u32,
-    pub xsdt_address:      u64,
-    pub extended_checksum: u8,
-    pub reserved:          [u8; 3],
-}
-
-/// Cabeçalho ACPI SDT
-#[repr(C, packed)]
-#[derive(Debug, Copy, Clone)]
-pub struct SdtHeader {
-    pub signature:        [u8; 4],
-    pub length:           u32,
-    pub revision:         u8,
-    pub checksum:         u8,
-    pub oem_id:           [u8; 6],
-    pub oem_table_id:     [u8; 8],
-    pub oem_revision:     u32,
-    pub creator_id:       u32,
-    pub creator_revision: u32,
-}
-
-/// Gerenciador ACPI
-pub struct AcpiManager {
-    rsdp_addr: u64,
-}
+pub struct AcpiManager;
 
 impl AcpiManager {
-    /// Encontrar RSDP na memória
-    pub fn find_rsdp() -> Option<u64> {
-        // TODO: Buscar RSDP em EBDA e áreas da BIOS
-        // Em UEFI, obter da Tabela de Sistema EFI
-        None
-    }
+    /// Localiza o endereço físico do RSDP.
+    ///
+    /// Prioriza ACPI 2.0 (XSDT) sobre ACPI 1.0 (RSDT) conforme padrão moderno.
+    ///
+    /// # Retorna
+    /// * `Ok(u64)`: Endereço físico do RSDP.
+    /// * `Err`: Se nenhuma tabela ACPI for encontrada no firmware.
+    pub fn get_rsdp_address() -> Result<u64> {
+        let st = system_table();
 
-    /// Criar gerenciador ACPI a partir do endereço RSDP
-    pub fn new(rsdp_addr: u64) -> Self {
-        Self { rsdp_addr }
-    }
-
-    /// Obter RSDP
-    pub fn get_rsdp(&self) -> &Rsdp {
-        unsafe { &*(self.rsdp_addr as *const Rsdp) }
-    }
-
-    /// Validar checksum do RSDP
-    pub fn validate_rsdp(&self) -> bool {
-        let rsdp = self.get_rsdp();
-        let bytes = unsafe {
-            core::slice::from_raw_parts(rsdp as *const _ as *const u8, mem::size_of::<Rsdp>())
-        };
-
-        let sum: u8 = bytes.iter().fold(0u8, |acc, &b| acc.wrapping_add(b));
-        sum == 0
-    }
-
-    /// Obter endereço RSDT/XSDT
-    pub fn get_sdt_address(&self) -> u64 {
-        let rsdp = self.get_rsdp();
-
-        if rsdp.revision >= 2 {
-            // ACPI 2.0+, usar XSDT
-            let extended = unsafe { &*(self.rsdp_addr as *const RsdpExtended) };
-            extended.xsdt_address
-        } else {
-            // ACPI 1.0, usar RSDT
-            rsdp.rsdt_address as u64
+        // 1. Tentar encontrar ACPI 2.0 (Preferencial em x86_64 e AArch64)
+        if let Some(addr) = st.get_configuration_table(&ACPI_20_TABLE_GUID) {
+            crate::println!("Hardware: ACPI 2.0 (XSDT) encontrado em {:#p}", addr);
+            return Ok(addr as u64);
         }
+
+        // 2. Fallback para ACPI 1.0 (Sistemas Legacy/VMs antigas)
+        if let Some(addr) = st.get_configuration_table(&ACPI_TABLE_GUID) {
+            crate::println!("Hardware: ACPI 1.0 (RSDT) encontrado em {:#p}", addr);
+            return Ok(addr as u64);
+        }
+
+        crate::println!("ERRO CRÍTICO: Tabela ACPI não encontrada no firmware.");
+        Err(BootError::Generic("ACPI RSDP not found"))
     }
 }

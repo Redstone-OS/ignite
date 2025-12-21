@@ -1,19 +1,35 @@
-//! Módulo de configuração de vídeo
+//! Subsistema de Vídeo do Bootloader
 //!
-//! Responsável por inicializar e configurar a saída de vídeo via GOP (Graphics
-//! Output Protocol)
+//! Fornece gráficos de alta resolução via UEFI GOP (Graphics Output Protocol).
+//! Permite desenhar na tela durante o boot e prepara o Framebuffer para o
+//! Kernel.
 
+pub mod framebuffer;
 pub mod gop;
+pub mod mode;
+pub mod pixel;
 
-pub use gop::GopVideoOutput;
+// Re-exportações para facilitar o uso no `main.rs`
+pub use framebuffer::{Framebuffer, FramebufferInfo};
+pub use gop::GopDriver;
+pub use mode::{VideoMode, VideoModeInfo};
+pub use pixel::{Color, PixelFormat};
 
-use crate::core::{error::Result, types::Framebuffer};
+use crate::core::error::Result;
 
-/// Trait para abstração de saída de vídeo
-pub trait VideoOutput {
-    /// Inicializa a saída de vídeo
-    fn initialize(&mut self) -> Result<()>;
+/// Inicializa o vídeo na melhor resolução possível e limpa a tela.
+/// Retorna o driver GOP e o Framebuffer ativo.
+pub fn init_video(
+    boot_services: &crate::uefi::BootServices,
+) -> Result<(GopDriver, FramebufferInfo)> {
+    let mut driver = GopDriver::new(boot_services)?;
 
-    /// Define o modo de vídeo (resolução) e retorna Framebuffer
-    fn set_mode(&mut self, width: usize, height: usize) -> Result<Framebuffer>;
+    // Auto-detecta e configura a melhor resolução (geralmente nativa do monitor)
+    let fb_info = driver.set_mode(None)?;
+
+    // (Opcional) Limpar a tela ou desenhar logo aqui
+    // let mut fb = unsafe { driver.get_framebuffer()? };
+    // fb.clear(Color::BLACK);
+
+    Ok((driver, fb_info))
 }

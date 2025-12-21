@@ -1,119 +1,95 @@
-//! Abstração de Protocolo de Boot
+//! Abstração de Protocolos de Boot
 //!
-//! Este módulo define traços e tipos para suportar múltiplos protocolos de
-//! boot. Protocolos atualmente suportados:
-//! - Protocolo Limine (nativo)
-//! - Protocolo de Boot Linux
-//! - Multiboot 2
-//! - Chainloading EFI/BIOS
+//! Gerencia o carregamento de diferentes formatos de kernel (Nativo, Linux,
+//! Multiboot2). O objetivo é preparar o estado da máquina para o salto final.
+
+use alloc::vec::Vec;
 
 use crate::core::{error::Result, types::LoadedFile};
 
 pub mod chainload;
-pub mod limine;
 pub mod linux;
 pub mod multiboot2;
+pub mod redstone;
 
-/// Traço de protocolo de boot
-///
-/// Todos os protocolos de boot devem implementar este traço para integrar com o
-/// bootloader.
+/// Informações necessárias para executar o kernel (Registradores e Ponteiros).
+#[derive(Debug, Clone, Copy, Default)]
+pub struct KernelLaunchInfo {
+    /// Endereço virtual de entrada (RIP).
+    pub entry_point:   u64,
+    /// Ponteiro da Stack inicial (RSP), se o protocolo exigir que o bootloader
+    /// a configure.
+    pub stack_pointer: Option<u64>,
+    /// Valor para o registrador RDI (1º Argumento - System V AMD64).
+    /// Usado pelo Redstone (ponteiro para BootInfo).
+    pub rdi:           u64,
+    /// Valor para o registrador RSI (2º Argumento).
+    /// Usado pelo Linux (ponteiro para boot_params).
+    pub rsi:           u64,
+    /// Valor para o registrador RDX (3º Argumento).
+    pub rdx:           u64,
+    /// Valor para o registrador RBX.
+    /// Usado pelo Multiboot2 (ponteiro para MBI).
+    pub rbx:           u64,
+}
+
+/// Interface que todo carregador de kernel deve implementar.
 pub trait BootProtocol {
-    /// Valida que o kernel/executável é compatível com este protocolo
-    fn validate(&self, kernel: &[u8]) -> Result<()>;
+    /// Nome do protocolo (para logs).
+    fn name(&self) -> &str;
 
-    /// Prepara informações de boot e kernel para transferência (handoff)
+    /// Verifica se este protocolo suporta o arquivo fornecido (Magic Bytes).
+    fn identify(&self, file_content: &[u8]) -> bool;
+
+    /// Carrega o kernel na memória e prepara as estruturas de dados.
     ///
-    /// Este método deve:
-    /// - Analisar cabeçalhos do kernel
-    /// - Carregar segmentos do kernel na memória
-    /// - Preparar informações de boot específicas do protocolo
-    /// - Configurar quaisquer estruturas de dados necessárias
-    fn prepare(
+    /// # Argumentos
+    /// * `kernel_file`: Conteúdo do kernel.
+    /// * `cmdline`: String de argumentos do kernel.
+    /// * `modules`: Lista de arquivos auxiliares (InitRD, Drivers) já
+    ///   carregados.
+    fn load(
         &mut self,
-        kernel: &[u8],
+        kernel_file: &[u8],
         cmdline: Option<&str>,
-        modules: &[LoadedFile],
-    ) -> Result<BootInfo>;
-
-    /// Obter o endereço do ponto de entrada
-    fn entry_point(&self) -> u64;
-
-    /// Nome do protocolo para logging
-    fn name(&self) -> &'static str;
+        modules: Vec<LoadedFile>,
+    ) -> Result<KernelLaunchInfo>;
 }
 
-/// Informações de boot preparadas por um protocolo
-#[derive(Debug)]
-pub struct BootInfo {
-    /// Endereço do ponto de entrada para pular
-    pub entry_point: u64,
+/// Tenta detectar e carregar um kernel usando todos os protocolos disponíveis.
+pub fn load_any(
+    allocator: &mut crate::memory::FrameAllocator, // Abstração necessária
+    page_table: &mut crate::memory::PageTableManager,
+    kernel_file: &[u8],
+    cmdline: Option<&str>,
+    modules: Vec<LoadedFile>,
+) -> Result<KernelLaunchInfo> {
+    // Lista de protocolos suportados
+    // Nota: Em um sistema real, você instanciaria isso de forma mais dinâmica
+    // ou passaria as dependências (alocador) via construtor.
 
-    /// Endereço base do kernel na memória
-    pub kernel_base: u64,
-
-    /// Tamanho do kernel em bytes
-    pub kernel_size: u64,
-
-    /// Ponteiro de pilha (se o protocolo gerenciar a pilha)
-    pub stack_ptr: Option<u64>,
-
-    /// Ponteiro de informações de boot específicas do protocolo
-    /// Isso será passado para o kernel em RDI (convenção de chamada x86_64)
-    pub boot_info_ptr: u64,
-
-    /// Registradores adicionais para definir (específico do protocolo)
-    pub registers: ProtocolRegisters,
-}
-
-/// Valores de registrador específicos do protocolo
-#[derive(Debug, Default)]
-pub struct ProtocolRegisters {
-    pub rax: Option<u64>,
-    pub rbx: Option<u64>,
-    pub rcx: Option<u64>,
-    pub rdx: Option<u64>,
-    pub rsi: Option<u64>,
-    pub r8:  Option<u64>,
-    pub r9:  Option<u64>,
-}
-
-/// Enumeração de tipos de protocolo
-#[derive(Debug, Clone, Copy, PartialEq, Eq)]
-pub enum ProtocolType {
-    /// Protocolo Limine nativo
-    Limine,
-    /// Protocolo de boot Linux
-    Linux,
-    /// Multiboot versão 2
-    Multiboot2,
-    /// Chainloading EFI
-    EfiChainload,
-    /// Chainloading BIOS
-    BiosChainload,
-}
-
-impl ProtocolType {
-    /// Analisar tipo de protocolo a partir de string
-    pub fn from_str(s: &str) -> Option<Self> {
-        match s.to_lowercase().as_str() {
-            "limine" | "native" => Some(Self::Limine),
-            "linux" => Some(Self::Linux),
-            "multiboot2" => Some(Self::Multiboot2),
-            "efi" | "uefi" | "efi_chainload" => Some(Self::EfiChainload),
-            "bios" | "bios_chainload" => Some(Self::BiosChainload),
-            _ => None,
-        }
+    // 1. Tentar Protocolo Nativo (Redstone/ELF)
+    let mut redstone = redstone::RedstoneProtocol::new(allocator, page_table);
+    if redstone.identify(kernel_file) {
+        crate::println!("Detectado Kernel Redstone/ELF.");
+        return redstone.load(kernel_file, cmdline, modules);
     }
 
-    /// Obter nome do protocolo
-    pub fn as_str(&self) -> &'static str {
-        match self {
-            Self::Limine => "limine",
-            Self::Linux => "linux",
-            Self::Multiboot2 => "multiboot2",
-            Self::EfiChainload => "efi_chainload",
-            Self::BiosChainload => "bios_chainload",
-        }
+    // 2. Tentar Linux
+    let mut linux = linux::LinuxProtocol::new(allocator);
+    if linux.identify(kernel_file) {
+        crate::println!("Detectado Kernel Linux (bzImage).");
+        return linux.load(kernel_file, cmdline, modules);
     }
+
+    // 3. Tentar Multiboot2
+    let mut mb2 = multiboot2::Multiboot2Protocol::new(allocator);
+    if mb2.identify(kernel_file) {
+        crate::println!("Detectado Kernel Multiboot2.");
+        return mb2.load(kernel_file, cmdline, modules);
+    }
+
+    Err(crate::core::error::BootError::Generic(
+        "Formato de kernel desconhecido",
+    ))
 }

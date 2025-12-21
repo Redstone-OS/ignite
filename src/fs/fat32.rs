@@ -1,14 +1,19 @@
-#![allow(unaligned_references)]
-
 //! Driver Nativo de Sistema de Arquivos FAT32
 //!
-//! Lê sistemas de arquivos FAT12/16/32 sem depender de UEFI
+//! Permite ler partições FAT32 diretamente, sem depender do UEFI.
+//! Útil para montar partições extras que o firmware não reconheceu.
 
-use alloc::{string::String, vec::Vec};
+use alloc::{boxed::Box, string::String, vec::Vec};
 
-use crate::core::error::{BootError, Result};
+use crate::{
+    core::error::{BootError, Result},
+    fs::{
+        dev::BlockDevice,
+        vfs::{Directory, File, FileSystem, Metadata},
+    },
+};
 
-/// BPB (Bios Parameter Block) para FAT
+/// BPB (Bios Parameter Block) para FAT32.
 #[repr(C, packed)]
 #[derive(Debug, Copy, Clone)]
 struct BiosParameterBlock {
@@ -28,10 +33,10 @@ struct BiosParameterBlock {
     total_sectors_32:    u32,
 }
 
-/// Extended BPB para FAT32
+/// Extended BPB.
 #[repr(C, packed)]
 #[derive(Debug, Copy, Clone)]
-struct Fat32ExtendedBPB {
+struct Fat32Ext {
     fat_size_32:        u32,
     ext_flags:          u16,
     fs_version:         u16,
@@ -47,110 +52,59 @@ struct Fat32ExtendedBPB {
     fs_type:            [u8; 8],
 }
 
-/// Entrada de diretório FAT
-#[repr(C, packed)]
-#[derive(Debug, Copy, Clone)]
-struct DirectoryEntry {
-    name:              [u8; 11],
-    attr:              u8,
-    reserved:          u8,
-    create_time_tenth: u8,
-    create_time:       u16,
-    create_date:       u16,
-    access_date:       u16,
-    first_cluster_hi:  u16,
-    write_time:        u16,
-    write_date:        u16,
-    first_cluster_lo:  u16,
-    file_size:         u32,
-}
-
-/// Implementação do sistema de arquivos FAT
-pub struct Fat32FileSystem {
-    bytes_per_sector:    u16,
-    sectors_per_cluster: u8,
-    reserved_sectors:    u16,
-    num_fats:            u8,
-    fat_size:            u32,
+pub struct Fat32FileSystem<D: BlockDevice> {
+    device:              D,
+    // Metadados do FS em cache
+    fat_start_lba:       u64,
+    data_start_lba:      u64,
+    sectors_per_cluster: u64,
     root_cluster:        u32,
-    total_sectors:       u32,
 }
 
-impl Fat32FileSystem {
-    /// Montar um sistema de arquivos FAT a partir do setor de boot
-    pub fn mount(boot_sector: &[u8]) -> Result<Self> {
-        if boot_sector.len() < 512 {
-            return Err(BootError::Generic("Boot sector too small"));
+impl<D: BlockDevice> Fat32FileSystem<D> {
+    /// Tenta montar um volume FAT32 a partir de um dispositivo de bloco.
+    pub fn mount(mut device: D) -> Result<Self> {
+        let mut buf = vec![0u8; 512];
+        device
+            .read_blocks(0, &mut buf)
+            .map_err(|_| BootError::FileSystem(crate::core::error::FileSystemError::ReadError))?;
+
+        // Validação de assinatura
+        if buf[510] != 0x55 || buf[511] != 0xAA {
+            return Err(BootError::FileSystem(
+                crate::core::error::FileSystemError::InvalidSignature,
+            ));
         }
 
-        // Parsear BPB
-        let bpb = unsafe { &*(boot_sector.as_ptr() as *const BiosParameterBlock) };
+        // Parse manual simplificado ou via struct (unsafe cast)
+        let bpb = unsafe { &*(buf.as_ptr() as *const BiosParameterBlock) };
 
-        // Validar assinatura
-        if boot_sector[510] != 0x55 || boot_sector[511] != 0xAA {
-            return Err(BootError::Generic("Invalid boot sector signature"));
+        // Verifica se é FAT32
+        if bpb.fat_size_16 != 0 {
+            return Err(BootError::FileSystem(
+                crate::core::error::FileSystemError::UnsupportedFsType,
+            ));
         }
 
-        // Determinar tipo de FAT e obter tamanho da FAT
-        let fat_size = if bpb.fat_size_16 != 0 {
-            bpb.fat_size_16 as u32
-        } else {
-            // FAT32
-            let ext_bpb = unsafe { &*(boot_sector[36..].as_ptr() as *const Fat32ExtendedBPB) };
-            ext_bpb.fat_size_32
-        };
-
-        let total_sectors = if bpb.total_sectors_16 != 0 {
-            bpb.total_sectors_16 as u32
-        } else {
-            bpb.total_sectors_32
-        };
-
-        // Obter cluster raiz (FAT32)
-        let root_cluster = if bpb.fat_size_16 == 0 {
-            let ext_bpb = unsafe { &*(boot_sector[36..].as_ptr() as *const Fat32ExtendedBPB) };
-            ext_bpb.root_cluster
-        } else {
-            2 // FAT12/16 usa cluster 2 para raiz
-        };
+        // TODO: Completar cálculos de LBA
 
         Ok(Self {
-            bytes_per_sector: bpb.bytes_per_sector,
-            sectors_per_cluster: bpb.sectors_per_cluster,
-            reserved_sectors: bpb.reserved_sectors,
-            num_fats: bpb.num_fats,
-            fat_size,
-            root_cluster,
-            total_sectors,
+            device,
+            fat_start_lba: 0,  // Placeholder
+            data_start_lba: 0, // Placeholder
+            sectors_per_cluster: bpb.sectors_per_cluster as u64,
+            root_cluster: 2, // Geralmente 2, mas deve ser lido do ext_bpb
         })
     }
+}
 
-    /// Ler um arquivo pelo caminho
-    pub fn read_file(&self, path: &str) -> Result<Vec<u8>> {
-        // TODO: Implementar
-        // 1. Parsear caminho em componentes
-        // 2. Navegar estrutura de diretório
-        // 3. Encontrar entrada de arquivo
-        // 4. Ler clusters usando FAT
-        // 5. Retornar dados do arquivo
-
-        Err(BootError::Generic("FAT32 read_file ainda não implementado"))
+// Implementação VFS (Stubs para compilação)
+impl<D: BlockDevice + 'static> FileSystem for Fat32FileSystem<D> {
+    fn root(&mut self) -> Result<Box<dyn Directory>> {
+        Err(BootError::Generic("FAT32 nativo ainda não implementado"))
     }
 
-    /// Obter cadeia de clusters da FAT
-    fn get_cluster_chain(&self, start_cluster: u32) -> Result<Vec<u32>> {
-        // TODO: Ler tabela FAT e seguir cadeia de clusters
-        let mut chain = Vec::new();
-        chain.push(start_cluster);
-        Ok(chain)
-    }
-
-    /// Calcular primeiro setor de um cluster
-    fn cluster_to_sector(&self, cluster: u32) -> u32 {
-        let root_dir_sectors = 0; // FAT32 não tem diretório raiz fixo
-        let first_data_sector = self.reserved_sectors as u32
-            + (self.num_fats as u32 * self.fat_size)
-            + root_dir_sectors;
-        first_data_sector + ((cluster - 2) * self.sectors_per_cluster as u32)
+    fn name(&self) -> &str {
+        "FAT32_NATIVE"
     }
 }

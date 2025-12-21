@@ -1,143 +1,156 @@
-//! Carregador de segmentos ELF na memória
+//! Carregador de Segmentos ELF com Suporte a Paginação
+//!
+//! Responsável por ler os segmentos `PT_LOAD`, alocar frames físicos
+//! correspondentes e mapeá-los no endereço virtual solicitado pelo Kernel.
 
-use goblin::elf::Elf;
+use goblin::elf::{Elf, program_header::PT_LOAD};
 
+use super::header::validate_header;
 use crate::{
     core::{
         error::{BootError, ElfError, Result},
         types::LoadedKernel,
     },
-    elf::ElfParser,
-    memory::MemoryAllocator,
+    memory::{FrameAllocator, PageTableManager, layout::PAGE_SIZE},
 };
 
-/// Carregador de ELF
-pub struct ElfLoader<'a> {
-    allocator: &'a MemoryAllocator<'a>,
+/// Carregador de Kernel ELF.
+pub struct ElfLoader<'a, A: FrameAllocator> {
+    allocator:  &'a mut A,
+    page_table: &'a mut PageTableManager,
 }
 
-impl<'a> ElfLoader<'a> {
-    /// Cria um novo carregador de ELF
-    pub fn new(allocator: &'a MemoryAllocator<'a>) -> Self {
-        Self { allocator }
-    }
-
-    /// Carrega um arquivo ELF na memória
-    ///
-    /// # Argumentos
-    /// * `elf_data` - Dados do arquivo ELF
-    ///
-    /// # Retorna
-    /// Informações sobre o kernel carregado
-    pub fn load(&self, elf_data: &[u8]) -> Result<LoadedKernel> {
-        // Parsear ELF
-        let elf = ElfParser::parse(elf_data)?;
-
-        // Calcular intervalo de endereços
-        let (min_vaddr, max_vaddr) = ElfParser::calculate_address_range(&elf);
-        let kernel_size = max_vaddr - min_vaddr;
-        let kernel_pages = MemoryAllocator::pages_for_size(kernel_size as usize);
-
-        log::info!(
-            "Carregando kernel: VAddr={:#x}-{:#x} Tam={:#x} ({} páginas)",
-            min_vaddr,
-            max_vaddr,
-            kernel_size,
-            kernel_pages
-        );
-
-        // IMPORTANTE: Alocar em QUALQUER endereço disponível, não em min_vaddr!
-        // O kernel pode ter min_vaddr = 0x0, que não é válido para alocar.
-        // Vamos alocar onde UEFI permitir e ajustar os offsets.
-        let kernel_base_ptr = self.allocator.allocate_any(kernel_pages)?;
-
-        log::info!(
-            "Kernel alocado em {:#x} (VAddr original era {:#x})",
-            kernel_base_ptr,
-            min_vaddr
-        );
-
-        // Zerar memória (BSS e paddings)
-        unsafe {
-            self.allocator
-                .zero_memory(kernel_base_ptr, kernel_size as usize);
+impl<'a, A: FrameAllocator> ElfLoader<'a, A> {
+    /// Cria um novo carregador vinculado a um alocador e uma tabela de páginas.
+    pub fn new(allocator: &'a mut A, page_table: &'a mut PageTableManager) -> Self {
+        Self {
+            allocator,
+            page_table,
         }
-
-        // Copiar segmentos
-        self.load_segments(&elf, elf_data, min_vaddr, kernel_base_ptr)?;
-
-        log::info!("Kernel carregado com sucesso em {:#x}", kernel_base_ptr);
-
-        // IMPORTANTE: Ajustar entry point para endereço físico!
-        // O ELF tem entry point Virtual (ex: 0x1000).
-        // Precisamos calcular o offset dentro da imagem e somar à base física.
-        // Offset = VirtualAddr - MinVirtualAddr
-        // EndereçoReal = BaseFísica + Offset
-
-        let entry_offset = elf.entry - min_vaddr;
-        let physical_entry = kernel_base_ptr + entry_offset;
-
-        log::info!(
-            "Entry point: ELF Virtual={:#x} - MinVAddr={:#x} -> Offset={:#x} -> Físico={:#x}",
-            elf.entry,
-            min_vaddr,
-            entry_offset,
-            physical_entry
-        );
-
-        Ok(LoadedKernel {
-            base_address: kernel_base_ptr,
-            size:         kernel_size,
-            entry_point:  physical_entry, // Usar entry point físico!
-        })
     }
 
-    /// Carrega os segmentos PT_LOAD do ELF na memória
-    fn load_segments(
-        &self,
-        elf: &Elf,
-        elf_data: &[u8],
-        min_vaddr: u64,
-        physical_base: u64,
-    ) -> Result<()> {
-        for ph in &elf.program_headers {
-            if ph.p_type == goblin::elf::program_header::PT_LOAD {
-                let mem_size = ph.p_memsz as usize;
-                let file_size = ph.p_filesz as usize;
-                let vaddr = ph.p_vaddr;
-                let offset = ph.p_offset as usize;
+    /// Carrega, aloca e mapeia o Kernel na memória.
+    ///
+    /// # Processo Industrial
+    /// 1. Parse e Validação do Header.
+    /// 2. Iteração de Segmentos `PT_LOAD`.
+    /// 3. Alocação de Frames Físicos (sob demanda).
+    /// 4. Cópia de Dados (Arquivo -> RAM Física).
+    /// 5. Zeroização de BSS (RAM Física).
+    /// 6. Mapeamento (Page Tables: Virtual -> Física).
+    pub fn load_kernel(&mut self, file_data: &[u8]) -> Result<LoadedKernel> {
+        let elf = Elf::parse(file_data).map_err(|_| BootError::Elf(ElfError::ParseError))?;
+        validate_header(&elf.header)?;
 
-                // Calcular offset relativo ao base virtual do kernel
-                let segment_offset = (vaddr - min_vaddr) as usize;
+        log::info!("Iniciando carregamento do Kernel ELF...");
 
-                // Endereço físico real = base física + offset
-                let dest_ptr = (physical_base + segment_offset as u64) as *mut u8;
+        let mut kernel_phys_start = u64::MAX;
+        let mut kernel_phys_end = 0;
+        let mut kernel_virt_start = u64::MAX;
+        let mut kernel_virt_end = 0;
 
-                log::info!(
-                    "Segmento: VAddr={:#x} -> PAddr={:#x} FileSz={:#x} MemSz={:#x}",
-                    vaddr,
-                    dest_ptr as u64,
-                    file_size,
-                    mem_size
-                );
+        for ph in elf.program_headers.iter() {
+            if ph.p_type != PT_LOAD {
+                continue;
+            }
 
-                // Copiar conteúdo do arquivo
+            if ph.p_memsz == 0 {
+                continue;
+            }
+
+            // Endereços Virtuais do Segmento
+            let virt_start = ph.p_vaddr;
+            let virt_end = virt_start + ph.p_memsz;
+
+            // Dados no arquivo
+            let file_start = ph.p_offset as usize;
+            let file_size = ph.p_filesz as usize;
+            let file_end = file_start + file_size;
+
+            // Validação de limites do arquivo
+            if file_end > file_data.len() {
+                return Err(BootError::Elf(ElfError::SegmentCopyError));
+            }
+
+            // Alinhamento de Páginas (4KiB)
+            // O segmento pode começar no meio de uma página (ex: 0x10080),
+            // mas alocamos e mapeamos a página inteira (0x10000).
+            let page_offset = virt_start % PAGE_SIZE;
+            let virt_page_start = virt_start - page_offset;
+            let total_bytes_needed = (virt_end - virt_page_start) as usize;
+            let pages_needed = (total_bytes_needed + (PAGE_SIZE as usize - 1)) / PAGE_SIZE as usize;
+
+            log::debug!(
+                "Carregando Segmento: Virt={:#x} Tam={:#x} ({} Páginas)",
+                virt_start,
+                ph.p_memsz,
+                pages_needed
+            );
+
+            // 1. Alocar memória física
+            let phys_addr = self.allocator.allocate_frame(pages_needed)?;
+
+            // Rastrear limites físicos e virtuais globais do kernel
+            if phys_addr < kernel_phys_start {
+                kernel_phys_start = phys_addr;
+            }
+            let phys_end = phys_addr + (pages_needed as u64 * PAGE_SIZE);
+            if phys_end > kernel_phys_end {
+                kernel_phys_end = phys_end;
+            }
+
+            if virt_start < kernel_virt_start {
+                kernel_virt_start = virt_start;
+            }
+            if virt_end > kernel_virt_end {
+                kernel_virt_end = virt_end;
+            }
+
+            // 2. Mapear na Tabela de Páginas (Virtual -> Físico)
+            // Isso cria a "ponte" para o kernel rodar no endereço que ele espera.
+            self.page_table
+                .map_kernel(phys_addr, virt_page_start, pages_needed, self.allocator)?;
+
+            // 3. Copiar Dados (Arquivo -> RAM)
+            // Nota: Escrevemos diretamente na memória física.
+            unsafe {
+                let dest_ptr = (phys_addr + page_offset) as *mut u8;
+
+                // Copiar parte presente no arquivo
                 if file_size > 0 {
-                    if offset + file_size > elf_data.len() {
-                        return Err(BootError::Elf(ElfError::SegmentCopyError));
-                    }
-
-                    let src_slice = &elf_data[offset..offset + file_size];
-                    unsafe {
-                        let dest_slice = core::slice::from_raw_parts_mut(dest_ptr, file_size);
-                        dest_slice.copy_from_slice(src_slice);
-                    }
+                    core::ptr::copy_nonoverlapping(
+                        file_data.as_ptr().add(file_start),
+                        dest_ptr,
+                        file_size,
+                    );
                 }
 
-                // Nota: Resto da memória (mem_size - file_size) já foi zerado
+                // 4. Zerar BSS (Memória restante do segmento não presente no arquivo)
+                if ph.p_memsz > ph.p_filesz {
+                    let bss_start_ptr = dest_ptr.add(file_size);
+                    let bss_size = (ph.p_memsz - ph.p_filesz) as usize;
+                    core::ptr::write_bytes(bss_start_ptr, 0, bss_size);
+                }
             }
         }
 
-        Ok(())
+        // Calcular Entry Point
+        // O Entry Point no header ELF é virtual. Como já mapeamos tudo,
+        // o kernel pode pular direto para esse endereço virtual DEPOIS de carregar o
+        // CR3.
+        let entry_point = elf.entry;
+
+        log::info!("Kernel Carregado. Entry Point Virtual: {:#x}", entry_point);
+        log::info!(
+            "Memória Física Ocupada: {:#x} - {:#x}",
+            kernel_phys_start,
+            kernel_phys_end
+        );
+
+        Ok(LoadedKernel {
+            base_address: kernel_phys_start, // Base física (para info)
+            size: kernel_phys_end - kernel_phys_start,
+            entry_point, // Entry point virtual (para salto)
+        })
     }
 }

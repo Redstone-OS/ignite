@@ -1,7 +1,8 @@
-//! Static Bump Allocator - Heap Estática em .bss
+//! Alocador Heap Estático (Bump Pointer)
 //!
-//! Usa buffer estático que existe desde o início e sobrevive ao
-//! exit_boot_services().
+//! Implementa `GlobalAlloc`. É simples, determinístico e não fragmenta.
+//! Ideal para bootloaders que alocam muito e liberam tudo de uma vez
+//! (quando passam o controle pro kernel).
 
 use core::{
     alloc::{GlobalAlloc, Layout},
@@ -9,17 +10,26 @@ use core::{
     ptr::null_mut,
 };
 
-/// Tamanho da heap estática (4MB)
-pub const HEAP_SIZE: usize = 4 * 1024 * 1024;
+use super::layout::BOOTLOADER_HEAP_SIZE;
 
-/// Heap estática - alocada na .bss section
-static mut HEAP: [u8; HEAP_SIZE] = [0; HEAP_SIZE];
+/// O símbolo `HEAP` reside na seção `.bss`.
+/// Garantimos alinhamento de 16 bytes para SIMD/SSE básico se necessário.
+#[repr(C, align(16))]
+struct HeapStorage([u8; BOOTLOADER_HEAP_SIZE]);
 
-/// Bump Allocator
+static mut HEAP_MEMORY: HeapStorage = HeapStorage([0; BOOTLOADER_HEAP_SIZE]);
+
+/// Alocador "Bump" (Incremento Linear).
+///
+/// Funciona como uma pilha: `next` aponta para o próximo byte livre.
+/// Alocação é O(1) (só soma ponteiro). Desalocação é "no-op" (vazamento
+/// intencional).
 pub struct BumpAllocator {
     next: UnsafeCell<usize>,
 }
 
+// SAFETY: Bootloader é single-threaded neste estágio (UEFI main thread).
+// Se introduzirmos APs (Application Processors), precisaremos de um Mutex real.
 unsafe impl Sync for BumpAllocator {}
 
 impl BumpAllocator {
@@ -29,49 +39,45 @@ impl BumpAllocator {
         }
     }
 
-    /// Inicializar - deve ser chamado ANTES de init()
-    pub unsafe fn init(&self) {
-        unsafe {
-            *self.next.get() = core::ptr::addr_of_mut!(HEAP).cast::<u8>() as usize;
-        }
+    /// Reinicia o alocador (perigoso, usar apenas em panic ou reset).
+    pub unsafe fn reset(&self) {
+        *self.next.get() = 0;
     }
 }
 
 unsafe impl GlobalAlloc for BumpAllocator {
     unsafe fn alloc(&self, layout: Layout) -> *mut u8 {
-        unsafe {
-            let heap_start = core::ptr::addr_of_mut!(HEAP).cast::<u8>() as usize;
-            let heap_end = heap_start + HEAP_SIZE;
+        let heap_start = &mut HEAP_MEMORY.0 as *mut u8 as usize;
+        let heap_end = heap_start + BOOTLOADER_HEAP_SIZE;
 
-            let next = *self.next.get();
+        let next_ptr = self.next.get();
+        let mut current_offset = *next_ptr;
+        let current_addr = heap_start + current_offset;
 
-            // Auto-init se necessário
-            if next == 0 {
-                *self.next.get() = heap_start;
-                return self.alloc(layout);
-            }
+        // Alinhamento: move o ponteiro para frente até satisfazer `layout.align()`
+        let align_offset = match current_addr % layout.align() {
+            0 => 0,
+            remainder => layout.align() - remainder,
+        };
 
-            let alloc_start = align_up(next, layout.align());
-            let alloc_end = match alloc_start.checked_add(layout.size()) {
-                Some(end) => end,
-                None => return null_mut(),
-            };
+        // Overflow check (segurança industrial)
+        let new_offset = match current_offset.checked_add(align_offset + layout.size()) {
+            Some(o) => o,
+            None => return null_mut(), // Overflow aritmético
+        };
 
-            if alloc_end > heap_end {
-                return null_mut();
-            }
-
-            *self.next.get() = alloc_end;
-            alloc_start as *mut u8
+        if heap_start + new_offset > heap_end {
+            return null_mut(); // Out of memory (OOM)
         }
+
+        // Commit da alocação
+        *next_ptr = new_offset;
+        (current_addr + align_offset) as *mut u8
     }
 
     unsafe fn dealloc(&self, _ptr: *mut u8, _layout: Layout) {
-        // Bump allocator não desaloca
+        // Bump allocator não libera memória individualmente.
+        // A memória é recuperada em massa quando o Kernel sobrescreve a região
+        // do Bootloader.
     }
-}
-
-#[inline]
-fn align_up(addr: usize, align: usize) -> usize {
-    (addr + align - 1) & !(align - 1)
 }
