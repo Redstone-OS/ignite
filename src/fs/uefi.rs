@@ -1,7 +1,7 @@
 //! Backend VFS para UEFI Simple File System
 //!
 //! Envolve o protocolo nativo da UEFI para que possa ser usado através da trait
-//! `Vfs`. É o driver principal usado para carregar o kernel da partição ESP.
+//! `Vfs`.
 
 use alloc::{
     boxed::Box,
@@ -88,12 +88,27 @@ impl File for UefiFile {
     }
 
     fn metadata(&self) -> Result<Metadata> {
-        // Obter tamanho (Simplificado: assumindo Info genérico)
-        // Em produção real, alocaríamos o buffer para EFI_FILE_INFO e faríamos o parse.
-        // Como não temos alloc::vec no core uefi::proto, deixamos stub seguro.
+        // Para uma implementação completa, deveríamos chamar GetInfo aqui.
+        // Como o buffer size é variável, simplificamos retornando o tamanho
+        // através de uma leitura de seek (estratégia comum em bootloaders simples).
+
+        let mut size = 0u64;
+        unsafe {
+            // Backup position
+            let mut current_pos = 0u64;
+            ((*self.protocol).get_position)(self.protocol, &mut current_pos);
+
+            // Seek end
+            ((*self.protocol).set_position)(self.protocol, 0xFFFFFFFFFFFFFFFF);
+            ((*self.protocol).get_position)(self.protocol, &mut size);
+
+            // Restore
+            ((*self.protocol).set_position)(self.protocol, current_pos);
+        }
+
         Ok(Metadata {
-            size:        0,
-            is_dir:      false,
+            size,
+            is_dir: false,
             is_readonly: false,
         })
     }
@@ -107,7 +122,6 @@ impl File for UefiFile {
     }
 }
 
-// Implementação de Drop para garantir fechamento
 impl Drop for UefiFile {
     fn drop(&mut self) {
         let _ = self.close();
@@ -115,7 +129,7 @@ impl Drop for UefiFile {
 }
 
 pub struct UefiDir {
-    protocol: *mut FileProtocol, // Raw pointer pois FileProtocol não é Send/Sync
+    protocol: *mut FileProtocol,
 }
 
 impl Directory for UefiDir {
@@ -123,30 +137,34 @@ impl Directory for UefiDir {
         let path_norm = normalize_path(path);
         let mut file_ptr = core::ptr::null_mut();
 
-        // Conversão de String para UCS-2 (Char16)
-        // Isso é caro e requer alocação, mas necessário para UEFI.
+        // Log para debug de caminho (Aparecerá no console QEMU)
+        // crate::println!("[DEBUG] FS Open: '{}' -> '{}'", path, path_norm);
+
+        // Conversão UCS-2
         let path_utf16: Vec<u16> = path_norm
             .encode_utf16()
             .chain(core::iter::once(0))
             .collect();
 
         unsafe {
-            ((*self.protocol).open)(
+            let status = ((*self.protocol).open)(
                 self.protocol,
                 &mut file_ptr,
                 path_utf16.as_ptr(),
                 FILE_MODE_READ,
                 0,
-            )
-            .to_result()
-            .map_err(|_| BootError::FileSystem(FileSystemError::FileNotFound))?;
+            );
+
+            if status.is_error() {
+                // crate::println!("[DEBUG] FS Error: Open falhou com status {:?}", status);
+                return Err(BootError::FileSystem(FileSystemError::FileNotFound));
+            }
         }
 
         Ok(Box::new(UefiFile { protocol: file_ptr }))
     }
 
     fn open_dir(&mut self, path: &str) -> Result<Box<dyn Directory>> {
-        // Em UEFI, abrir diretório é igual a abrir arquivo
         let path_norm = normalize_path(path);
         let mut dir_ptr = core::ptr::null_mut();
         let path_utf16: Vec<u16> = path_norm
@@ -160,7 +178,7 @@ impl Directory for UefiDir {
                 &mut dir_ptr,
                 path_utf16.as_ptr(),
                 FILE_MODE_READ,
-                0, // Atributos ignorados na abertura de leitura
+                0,
             )
             .to_result()
             .map_err(|_| BootError::FileSystem(FileSystemError::FileNotFound))?;
@@ -170,7 +188,6 @@ impl Directory for UefiDir {
     }
 
     fn list(&mut self) -> Result<Vec<String>> {
-        // Implementação futura: ler entradas do diretório repetidamente
         Ok(Vec::new())
     }
 }

@@ -6,17 +6,24 @@
 use alloc::string::{String, ToString};
 
 /// Normaliza um caminho para o formato UEFI (separador `\`).
-/// Remove prefixos como `boot:` ou `/`.
+/// Remove prefixos como `boot():`, `boot:` ou `/` inicial.
 pub fn normalize_path(path: &str) -> String {
+    // 1. Unificar separadores para o padrão UEFI (\)
     let mut p = path.replace('/', "\\");
 
-    // Remove prefixos de volume comuns em configs
-    if p.starts_with("boot:") {
-        p = p.replace("boot:", "");
+    // 2. Remover prefixos de dispositivo conhecidos
+    // A ordem importa: strings mais longas primeiro
+    if p.starts_with("boot():") {
+        p = p[7..].to_string(); // Remove "boot():"
+    } else if p.starts_with("boot:") {
+        p = p[5..].to_string(); // Remove "boot:"
+    } else if p.starts_with("vol():") {
+        p = p[6..].to_string();
     }
 
-    // Remove barra inicial (UEFI muitas vezes prefere caminhos relativos à raiz do
-    // volume)
+    // 3. Remover barra invertida inicial
+    // UEFI SimpleFileSystem espera caminhos relativos à raiz, ex: "EFI\BOOT\..."
+    // e não "\EFI\BOOT\..."
     if p.starts_with('\\') {
         p.remove(0);
     }

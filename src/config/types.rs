@@ -40,7 +40,7 @@ impl Default for BootConfig {
         let rescue_entry = Entry {
             name:     "UEFI Shell (Rescue)".to_string(),
             protocol: Protocol::EfiChainload,
-            path:     "boot():/efi/boot/shellx64.efi".to_string(),
+            path:     "boot():/EFI/BOOT/shellx64.efi".to_string(),
             cmdline:  None,
             modules:  Vec::new(),
             dtb_path: None,
