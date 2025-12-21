@@ -2,8 +2,7 @@
 //!
 //! Dados passados para o Kernel.
 
-use crate::memory::layout::BootLayout; // Import absoluto para evitar erros de 'super'
-use crate::memory::region::PhysicalMemoryRegion;
+use crate::memory::{layout::BootLayout, region::PhysicalMemoryRegion};
 
 /// Estrutura principal de troca de dados (ABI estável).
 #[repr(C)]
@@ -29,8 +28,21 @@ pub struct BootInfo {
 
     /// Layout de memória configurado pelo bootloader.
     pub layout: BootLayout,
+
+    /// Endereço do InitRD (se houver)
+    pub initrd_addr: u64,
+
+    /// Tamanho do InitRD
+    pub initrd_size: u64,
+
+    /// Endereço RSDP (ACPI)
+    pub rsdp_addr: u64,
+
+    /// Ponteiro para a System Table UEFI
+    pub uefi_system_table: u64,
 }
 
 impl BootInfo {
     pub const MAGIC: u64 = 0x4947_4E49_5445_4F53; // "IGNITEOS"
+    pub const VERSION: u64 = 1;
 }

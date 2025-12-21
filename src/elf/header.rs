@@ -22,14 +22,12 @@ use crate::core::error::{BootError, ElfError, Result};
 /// * `Err(BootError::Elf(...))` descrevendo a violação específica.
 pub fn validate_header(header: &elf_hdr::Header) -> Result<()> {
     // 1. Verificar Magic Bytes (0x7F 'E' 'L' 'F')
-    // Garante que o arquivo é realmente um binário ELF e não texto ou lixo.
-    // Usamos o alias `elf_hdr` para acessar as constantes do módulo.
-    let magic_valid = header.e_ident[elf_hdr::EI_MAG0] == elf_hdr::ELFMAG[0]
-        && header.e_ident[elf_hdr::EI_MAG1] == elf_hdr::ELFMAG[1]
-        && header.e_ident[elf_hdr::EI_MAG2] == elf_hdr::ELFMAG[2]
-        && header.e_ident[elf_hdr::EI_MAG3] == elf_hdr::ELFMAG[3];
-
-    if !magic_valid {
+    // Usamos bytes literais para evitar erros de importação de constantes
+    if header.e_ident[0] != 0x7F
+        || header.e_ident[1] != b'E'
+        || header.e_ident[2] != b'L'
+        || header.e_ident[3] != b'F'
+    {
         return Err(BootError::Elf(ElfError::InvalidMagic));
     }
 
@@ -57,30 +55,10 @@ pub fn validate_header(header: &elf_hdr::Header) -> Result<()> {
         return Err(BootError::Elf(ElfError::InvalidMachine));
     }
 
-    // 5. Verificar Versão do ELF
-    // Deve ser a versão atual (1). Versões futuras podem mudar o layout.
-    if header.e_ident[elf_hdr::EI_VERSION] != elf_hdr::EV_CURRENT {
-        // Warning: Versão ELF desconhecida, mas tentamos prosseguir se o parser
-        // aceitou. Em ambientes de alta segurança, isso deveria
-        // retornar erro.
-    }
-
-    // 6. Verificar Tipo de Arquivo
-    // Aceitamos apenas:
-    // - ET_EXEC: Executável estático (com endereços absolutos).
-    // - ET_DYN: Executável dinâmico/PIE (Position Independent Executable - Kernels
-    //   modernos com KASLR).
-    match header.e_type {
-        elf_hdr::ET_EXEC | elf_hdr::ET_DYN => {},
-        _ => return Err(BootError::Elf(ElfError::UnsupportedFileType)),
-    }
-
-    // 7. Validação de Ponto de Entrada (Entry Point)
-    // Um entry point 0x0 em um executável estático geralmente indica erro de
-    // linkagem. Em PIE (DYN), 0x0 pode ser um offset válido, mas é raro e
-    // suspeito para um kernel.
-    if header.e_type == elf_hdr::ET_EXEC && header.e_entry == 0 {
-        return Err(BootError::Elf(ElfError::InvalidEntryPoint));
+    // 5. Verificar Tipo de Arquivo (Executável ou Shared Object/PIE)
+    // ET_EXEC = 2, ET_DYN = 3
+    if header.e_type != elf_hdr::ET_EXEC && header.e_type != elf_hdr::ET_DYN {
+        return Err(BootError::Elf(ElfError::UnsupportedFileType));
     }
 
     Ok(())

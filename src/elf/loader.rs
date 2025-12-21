@@ -14,14 +14,13 @@ use crate::{
     memory::{FrameAllocator, PageTableManager, layout::PAGE_SIZE},
 };
 
-/// Carregador de Kernel ELF.
-pub struct ElfLoader<'a, A: FrameAllocator> {
+// FIX: ?Sized permite Trait Objects
+pub struct ElfLoader<'a, A: FrameAllocator + ?Sized> {
     allocator:  &'a mut A,
     page_table: &'a mut PageTableManager,
 }
 
-impl<'a, A: FrameAllocator> ElfLoader<'a, A> {
-    /// Cria um novo carregador vinculado a um alocador e uma tabela de páginas.
+impl<'a, A: FrameAllocator + ?Sized> ElfLoader<'a, A> {
     pub fn new(allocator: &'a mut A, page_table: &'a mut PageTableManager) -> Self {
         Self {
             allocator,
@@ -42,15 +41,11 @@ impl<'a, A: FrameAllocator> ElfLoader<'a, A> {
         let elf = Elf::parse(file_data).map_err(|_| BootError::Elf(ElfError::ParseError))?;
         validate_header(&elf.header)?;
 
-        log::info!("Iniciando carregamento do Kernel ELF...");
-
         let mut kernel_phys_start = u64::MAX;
         let mut kernel_phys_end = 0;
-        let mut kernel_virt_start = u64::MAX;
-        let mut kernel_virt_end = 0;
 
         for ph in elf.program_headers.iter() {
-            if ph.p_type != PT_LOAD {
+            if ph.p_type != PT_LOAD || ph.p_memsz == 0 {
                 continue;
             }
 
@@ -148,9 +143,9 @@ impl<'a, A: FrameAllocator> ElfLoader<'a, A> {
         );
 
         Ok(LoadedKernel {
-            base_address: kernel_phys_start, // Base física (para info)
-            size: kernel_phys_end - kernel_phys_start,
-            entry_point, // Entry point virtual (para salto)
+            base_address: kernel_phys_start,
+            size:         kernel_phys_end - kernel_phys_start,
+            entry_point:  elf.entry,
         })
     }
 }

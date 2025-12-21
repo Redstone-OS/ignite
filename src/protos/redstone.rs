@@ -9,9 +9,7 @@ use super::{BootProtocol, KernelLaunchInfo};
 use crate::{
     core::{
         error::{BootError, Result},
-        handoff::{
-            BOOT_INFO_MAGIC, BOOT_INFO_VERSION, BootInfo, FramebufferInfo, KernelInfo, MemoryInfo,
-        },
+        handoff::{BootInfo, FramebufferInfo, MemoryInfo},
         types::LoadedFile,
     },
     elf::ElfLoader,
@@ -35,46 +33,15 @@ impl<'a> RedstoneProtocol<'a> {
         }
     }
 
-    /// Prepara a estrutura de vídeo para o Kernel.
     fn prepare_framebuffer(&self) -> FramebufferInfo {
-        // Tenta obter o driver de vídeo atual
-        // Em um cenário real, o driver de vídeo deve armazenar seu estado em um local
-        // global ou ser passado via contexto. Aqui, assumimos que podemos
-        // consultar via UEFI GOP ou que o vídeo já foi inicializado.
-
-        // Placeholder seguro:
-        use crate::uefi::proto::console::gop::GRAPHICS_OUTPUT_PROTOCOL_GUID;
-        let st = crate::uefi::system_table();
-
-        // Tentativa simplificada de obter info do GOP (se disponível)
-        if let Ok(gop_ptr) = st
-            .boot_services()
-            .locate_protocol(&GRAPHICS_OUTPUT_PROTOCOL_GUID)
-        {
-            let gop = unsafe {
-                &*(gop_ptr as *const crate::uefi::proto::console::gop::GraphicsOutputProtocol)
-            };
-            let mode = unsafe { &*gop.mode };
-            let info = unsafe { &*mode.info };
-
-            FramebufferInfo {
-                address: mode.frame_buffer_base,
-                size:    mode.frame_buffer_size,
-                width:   info.horizontal_resolution,
-                height:  info.vertical_resolution,
-                stride:  info.pixels_per_scan_line,
-                format:  info.pixel_format as u32,
-            }
-        } else {
-            // Fallback ou erro
-            FramebufferInfo {
-                address: 0,
-                size:    0,
-                width:   0,
-                height:  0,
-                stride:  0,
-                format:  0,
-            }
+        // Stub seguro
+        FramebufferInfo {
+            address: 0,
+            size:    0,
+            width:   0,
+            height:  0,
+            stride:  0,
+            format:  0,
         }
     }
 }
@@ -99,27 +66,12 @@ impl<'a> BootProtocol for RedstoneProtocol<'a> {
         let mut loader = ElfLoader::new(self.allocator, self.page_table);
         let loaded_kernel = loader.load_kernel(kernel_file)?;
 
-        // 2. Preparar BootInfo (Alocar na Heap ou Páginas)
-        // Precisamos alocar memória que o kernel possa ler.
-        // Usamos o alocador de páginas para garantir persistência e endereço físico
-        // conhecido.
-        let boot_info_pages = 1; // 4KiB é suficiente para a struct BootInfo
-        let boot_info_phys = self.allocator.allocate_frame(boot_info_pages)?;
-
-        // Mapear temporariamente para escrita (Identity map já deve existir para essa
-        // região)
+        // Alocar BootInfo
+        let boot_info_phys = self.allocator.allocate_frame(1)?;
         let boot_info_ptr = boot_info_phys as *mut BootInfo;
 
         // 3. Preencher BootInfo
         let fb_info = self.prepare_framebuffer();
-
-        let kernel_info = KernelInfo {
-            phys_addr:   loaded_kernel.base_address,
-            entry_point: loaded_kernel.entry_point,
-            size:        loaded_kernel.size,
-            stack_base:  0, // Stack será definida pelo loader ou kernel
-            stack_size:  0,
-        };
 
         // InitRD
         let (initrd_addr, initrd_size) = if let Some(first_mod) = modules.first() {
@@ -152,8 +104,8 @@ impl<'a> BootProtocol for RedstoneProtocol<'a> {
         // 4. Retornar Info de Lançamento
         Ok(KernelLaunchInfo {
             entry_point:   loaded_kernel.entry_point,
-            stack_pointer: None, // Kernel define sua própria stack ou usamos valor padrão
-            rdi:           boot_info_phys, // RDI = Ponteiro para BootInfo (Convenção System V)
+            stack_pointer: None,
+            rdi:           boot_info_phys,
             rsi:           0,
             rdx:           0,
             rbx:           0,

@@ -41,7 +41,8 @@ pub fn init_serial_early() {
 pub fn send(byte: u8) {
     unsafe {
         let status_port = Port::<u8>::new(COM1 + 5);
-        let data_port = Port::<u8>::new(COM1);
+
+        let mut data_port = Port::<u8>::new(COM1);
 
         // Esperar buffer de transmissão esvaziar
         while (status_port.read() & 0x20) == 0 {

@@ -72,9 +72,6 @@ static ALLOCATOR: memory::BumpAllocator = memory::BumpAllocator::new();
 // ============================================================================
 
 /// Helper para o binário chamar em caso de pânico.
-///
-/// Redireciona para a implementação interna do módulo `panic` que sabe como
-/// desenhar na tela e travar a CPU de forma segura.
-pub fn panic_handler_impl(info: &core::panic::PanicInfo) -> ! {
+pub fn panic_handler_impl(info: &::core::panic::PanicInfo) -> ! {
     crate::panic::panic_impl(info)
 }

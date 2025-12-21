@@ -58,7 +58,7 @@ pub trait BootProtocol {
 
 /// Tenta detectar e carregar um kernel usando todos os protocolos disponíveis.
 pub fn load_any(
-    allocator: &mut crate::memory::FrameAllocator, // Abstração necessária
+    allocator: &mut dyn crate::memory::FrameAllocator, // FIX: dyn trait object
     page_table: &mut crate::memory::PageTableManager,
     kernel_file: &[u8],
     cmdline: Option<&str>,

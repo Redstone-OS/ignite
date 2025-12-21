@@ -27,20 +27,18 @@ impl SecurityPolicy {
 
         Self {
             secure_boot:    sb_active,
-            // Se Secure Boot estiver ativo, forçamos Developer Mode = false
-            developer_mode: !sb_active && config.verbose,
+            // FIX: Usar !quiet no lugar de verbose (já que verbose não existe)
+            developer_mode: !sb_active && !config.quiet,
         }
     }
 
     /// Decide o que fazer em caso de falha de verificação de assinatura.
     pub fn on_signature_fail(&self) -> PolicyAction {
         if self.secure_boot {
-            // Secure Boot ativo: Violação é fatal.
-            crate::println!("CRÍTICO: Violação de Secure Boot detectada. Sistema travado.");
+            crate::println!("CRÍTICO: Violação de Secure Boot.");
             PolicyAction::Halt
         } else {
-            // Secure Boot inativo: Apenas aviso.
-            crate::println!("AVISO: Assinatura inválida, mas Secure Boot inativo. Continuando.");
+            crate::println!("AVISO: Assinatura inválida (SB inativo).");
             PolicyAction::WarnAndContinue
         }
     }

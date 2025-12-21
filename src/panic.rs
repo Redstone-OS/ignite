@@ -13,18 +13,9 @@ use core::panic::PanicInfo;
 
 use crate::arch;
 
-/// Função chamada pelo compilador em caso de pânico.
-#[panic_handler]
-fn panic(info: &PanicInfo) -> ! {
-    // Desabilita interrupções se possível (embora em UEFI estejamos em polling)
-    // unsafe { arch::x86::instructions::disable_interrupts(); }
+pub fn panic_impl(info: &PanicInfo) -> ! {
+    crate::println!("\n*** FATAL SYSTEM ERROR ***");
 
-    crate::println!("");
-    crate::println!("**************************************************");
-    crate::println!("               FATAL SYSTEM ERROR                 ");
-    crate::println!("**************************************************");
-
-    // Tenta extrair a localização do erro (Arquivo e Linha)
     if let Some(location) = info.location() {
         crate::println!(
             "Local: {}:{}:{}",
@@ -32,22 +23,14 @@ fn panic(info: &PanicInfo) -> ! {
             location.line(),
             location.column()
         );
-    } else {
-        crate::println!("Local: Desconhecido");
     }
 
-    // Tenta extrair a mensagem de erro
-    if let Some(message) = info.message() {
-        crate::println!("Erro:  {}", message);
-    } else {
-        crate::println!("Erro:  Causa desconhecida");
-    }
+    // FIX: message() retorna PanicMessage diretamente em versões recentes
+    // e display dele funciona. Removemos o `if let Some` incorreto.
+    let msg = info.message();
+    crate::println!("Erro:  {}", msg);
 
-    crate::println!("**************************************************");
-    crate::println!("O sistema foi paralisado para evitar corrupcao.");
-    crate::println!("Por favor, reinicie manualmente.");
-
-    // Loop infinito para segurar a CPU
+    crate::println!("Sistema paralisado.");
     loop {
         arch::hlt();
     }
