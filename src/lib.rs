@@ -104,7 +104,7 @@ pub fn boot(image_handle: Handle, system_table: *mut SystemTable) -> ! {
     }
 
     // Alocar heap estática para bump allocator
-    let heap_start = unsafe {
+    let _heap_start = unsafe {
         boot_services
             .allocate_pages_helper(
                 crate::uefi::table::boot::AllocateType::AllocateAnyPages,
@@ -250,26 +250,28 @@ pub fn boot(image_handle: Handle, system_table: *mut SystemTable) -> ! {
         )
     };
 
-    let mut region_count = 0;
-    /*for desc in memory_map.entries() {
-        if region_count >= MAX_REGIONS {
-            break;
-        }
-
-        let region_type = match desc.ty {
-            MemoryType::CONVENTIONAL => crate::core::boot_info::MemoryRegionType::Usable,
-            MemoryType::ACPI_RECLAIM => crate::core::boot_info::MemoryRegionType::AcpiReclaimable,
-            MemoryType::ACPI_NON_VOLATILE => crate::core::boot_info::MemoryRegionType::AcpiNvs,
-            _ => crate::core::boot_info::MemoryRegionType::Reserved,
-        };
-
-        memory_regions[region_count] = crate::core::boot_info::MemoryRegion::new(
-            desc.phys_start,
-            desc.page_count * 4096,
-            region_type,
-        );
-        region_count += 1;
-    }*/
+    let region_count = 0;
+    // for desc in memory_map.entries() {
+    // if region_count >= MAX_REGIONS {
+    // break;
+    // }
+    //
+    // let region_type = match desc.ty {
+    // MemoryType::CONVENTIONAL => crate::core::boot_info::MemoryRegionType::Usable,
+    // MemoryType::ACPI_RECLAIM =>
+    // crate::core::boot_info::MemoryRegionType::AcpiReclaimable,
+    // MemoryType::ACPI_NON_VOLATILE =>
+    // crate::core::boot_info::MemoryRegionType::AcpiNvs,
+    // _ => crate::core::boot_info::MemoryRegionType::Reserved,
+    // };
+    //
+    // memory_regions[region_count] = crate::core::boot_info::MemoryRegion::new(
+    // desc.phys_start,
+    // desc.page_count * 4096,
+    // region_type,
+    // );
+    // region_count += 1;
+    // }
 
     info!("Memory map: {} regions collected from UEFI", region_count);
 
@@ -327,11 +329,9 @@ pub fn boot(image_handle: Handle, system_table: *mut SystemTable) -> ! {
     // 10. Sair dos serviços de boot usando nova API freestanding 0.31
     // TODO: Se boot for bem-sucedido (kernel assume controle),
     // resetar contador de tentativas em próximo boot
-    unsafe {
-        // TODO: Implementar exit_boot_services usando nossa camada UEFI
-        // let _ = system_table.exit_boot_services(...);
-        log::warn!("exit_boot_services not yet implemented with pure UEFI");
-    }
+    // TODO: Implementar exit_boot_services usando nossa camada UEFI
+    // let _ = system_table.exit_boot_services(...);
+    log::warn!("exit_boot_services not yet implemented with pure UEFI");
 
     // 11. Saltar para o kernel usando função naked
     // IMPORTANTE: Inline assembly não funciona, usar naked function
@@ -439,7 +439,7 @@ fn create_default_config() -> config::types::BootConfig {
 
     use config::types::{BootConfig, MenuEntry, WallpaperStyle};
 
-    use crate::core::constants::{boot::BOOT_DELAY_SECONDS, paths::*};
+    use crate::core::constants::paths::*;
 
     let mut config = BootConfig {
         timeout:              Some(3), // 3 segundos para permitir tecla M

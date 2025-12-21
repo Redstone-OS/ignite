@@ -107,7 +107,7 @@ pub fn decompress_auto(data: &[u8], path: &str) -> Result<Vec<u8>> {
 
         // Calcular taxa de compressão
         let ratio = if original_size > 0 {
-            (decompressed_size as f32 / original_size as f32)
+            decompressed_size as f32 / original_size as f32
         } else {
             0.0
         };

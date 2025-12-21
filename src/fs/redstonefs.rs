@@ -3,10 +3,6 @@
 //! Este módulo contém as definições e implementações para leitura do
 //! RedstoneFS.
 
-use core::marker::PhantomData;
-
-use crate::hardware::io::{Io, ReadOnly};
-
 pub const BLOCK_SIZE: u64 = 4096;
 pub const RECORD_SIZE: u64 = 4096;
 

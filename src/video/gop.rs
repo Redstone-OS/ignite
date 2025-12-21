@@ -5,11 +5,7 @@ use crate::{
         error::{BootError, Result, VideoError},
         types::Framebuffer,
     },
-    uefi::{
-        BootServices, Handle,
-        proto::console::gop::{GRAPHICS_OUTPUT_PROTOCOL_GUID, GraphicsOutputProtocol},
-        table::boot::OPEN_PROTOCOL_EXCLUSIVE,
-    },
+    uefi::{BootServices, Handle},
     video::VideoOutput,
 };
 
@@ -31,8 +27,8 @@ impl<'a> GopVideoOutput<'a> {
     pub fn get_framebuffer(&self) -> Framebuffer {
         // TODO: Implementar quando GOP parser estiver funcionando
         Framebuffer {
-            ptr: 0,
-            size: 0,
+            ptr:                   0,
+            size:                  0,
             horizontal_resolution: 0,
             vertical_resolution:   0,
             stride:                0,

@@ -78,9 +78,11 @@ pub fn write_bytes(bytes: &[u8]) {
 
 /// Escreve um byte na porta serial
 unsafe fn write_byte(byte: u8) {
-    // Wait for transmit buffer to be empty
-    while (inb(COM1_PORT + 5) & 0x20) == 0 {}
-    outb(COM1_PORT, byte);
+    unsafe {
+        // Wait for transmit buffer to be empty
+        while (inb(COM1_PORT + 5) & 0x20) == 0 {}
+        outb(COM1_PORT, byte);
+    }
 }
 
 /// Macro para output serial condicional
@@ -109,29 +111,35 @@ macro_rules! serial_outln {
 /// Não verifica se está habilitado - use com cuidado!
 #[inline]
 pub unsafe fn write_byte_raw(byte: u8) {
-    outb(COM1_PORT, byte);
+    unsafe {
+        outb(COM1_PORT, byte);
+    }
 }
 
 /// Output byte to I/O port
 #[inline]
 unsafe fn outb(port: u16, val: u8) {
-    core::arch::asm!(
-        "out dx, al",
-        in("dx") port,
-        in("al") val,
-        options(nostack, preserves_flags)
-    );
+    unsafe {
+        core::arch::asm!(
+            "out dx, al",
+            in("dx") port,
+            in("al") val,
+            options(nostack, preserves_flags)
+        );
+    }
 }
 
 /// Input byte from I/O port
 #[inline]
 unsafe fn inb(port: u16) -> u8 {
     let val: u8;
-    core::arch::asm!(
-        "in al, dx",
-        out("al") val,
-        in("dx") port,
-        options(nostack, preserves_flags)
-    );
+    unsafe {
+        core::arch::asm!(
+            "in al, dx",
+            out("al") val,
+            in("dx") port,
+            options(nostack, preserves_flags)
+        );
+    }
     val
 }

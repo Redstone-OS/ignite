@@ -74,9 +74,11 @@ pub struct FileInfo {
 impl FileInfo {
     /// Obtém o nome do arquivo (unsafe - precisa garantir que buffer é válido)
     pub unsafe fn file_name(&self) -> *const Char16 {
-        let base = self as *const _ as *const u8;
-        let name_offset = core::mem::size_of::<FileInfo>();
-        base.add(name_offset) as *const Char16
+        unsafe {
+            let base = self as *const _ as *const u8;
+            let name_offset = core::mem::size_of::<FileInfo>();
+            base.add(name_offset) as *const Char16
+        }
     }
 }
 

@@ -11,10 +11,7 @@ use log::info;
 use crate::{
     config::types::{BootConfig, MenuEntry},
     core::types::Framebuffer,
-    uefi::{
-        BootServices,
-        table::system::{InputKey, SCAN_DOWN, SCAN_ESC, SCAN_UP},
-    },
+    uefi::BootServices,
 };
 
 /// Menu de boot interativo
@@ -81,7 +78,7 @@ impl<'a> BootMenu<'a> {
             // Verificar se há tecla pressionada
             // TODO: Implementar read_key usando InputProtocol
             // Por enquanto, timeout simples
-            let _ = unsafe { (boot_services.stall)(50_000) }; // 50ms
+            let _ = (boot_services.stall)(50_000); // 50ms
 
             // TODO: Check para tecla 'M' não implementado ainda
             // Aguardando implementação de read_key
@@ -194,10 +191,10 @@ impl<'a> BootMenu<'a> {
 
     /// Aguarda input do usuário
     fn wait_for_key(&self) -> MenuAction {
-        let _stdin = self.boot_services.stdin();
+        let stdin = self.boot_services.stdin();
 
         loop {
-            match stdin.read_key() {
+            match unsafe { (*stdin).read() } {
                 Ok(Some(_key)) => {
                     // TODO: Implementar quando InputKey wrapper estiver completo
                     // Por enquanto retorna Select

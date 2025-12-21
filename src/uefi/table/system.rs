@@ -33,6 +33,23 @@ pub struct SimpleTextInputProtocol {
     pub wait_for_key:    Event,
 }
 
+impl SimpleTextInputProtocol {
+    /// Helper para ler uma tecla (wraps read_key_stroke)
+    pub fn read(&mut self) -> Result<Option<InputKey>> {
+        let mut key = InputKey {
+            scan_code:    0,
+            unicode_char: 0,
+        };
+        let status = (self.read_key_stroke)(self as *mut _, &mut key);
+
+        match status {
+            Status::SUCCESS => Ok(Some(key)),
+            Status::NOT_READY => Ok(None),
+            _ => Err(status),
+        }
+    }
+}
+
 /// Input Key
 ///
 /// Spec: 12.3.3 - EFI_INPUT_KEY

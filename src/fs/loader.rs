@@ -8,16 +8,7 @@ use crate::{
         types::LoadedFile,
     },
     memory::MemoryAllocator,
-    uefi::{
-        Handle, Status,
-        proto::media::{
-            file::{
-                CStr16, FILE_INFO_GUID, FILE_MODE_READ, FileAttribute, FileInfo, FileMode,
-                FileProtocol,
-            },
-            fs::SimpleFileSystemProtocol,
-        },
-    },
+    uefi::{Handle, proto::media::file::FileProtocol},
 };
 
 /// Carregador de arquivos UEFI
@@ -34,9 +25,9 @@ impl<'a> FileLoader<'a> {
     /// * `image_handle` - Handle da imagem do bootloader
     /// * `allocator` - Alocador de memória
     pub fn new(
-        boot_services: &crate::uefi::BootServices,
-        image_handle: Handle,
-        allocator: &'a MemoryAllocator<'a>,
+        _boot_services: &crate::uefi::BootServices,
+        _image_handle: Handle,
+        _allocator: &'a MemoryAllocator<'a>,
     ) -> Result<Self> {
         // TODO: Implementar quando locate_protocol e open_volume estiverem prontos
         log::warn!("FileLoader::new not fully implemented - filesystem access not available yet");

@@ -27,7 +27,7 @@ impl BootServices {
     /// Aguarda por um período (microsegundos)
     #[inline]
     pub fn stall_helper(&self, microseconds: usize) -> Result<()> {
-        let status = unsafe { (self.stall)(microseconds) };
+        let status = (self.stall)(microseconds);
         status.to_result()
     }
 
