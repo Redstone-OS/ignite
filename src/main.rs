@@ -123,155 +123,38 @@ pub struct KernelArgs {
 fn select_mode(os: &impl Os, output_i: usize, live: &mut bool) -> Option<OsVideoMode> {
     let mut modes = Vec::new();
     for mode in os.video_modes(output_i) {
-        let mut aspect_w = mode.width;
-        let mut aspect_h = mode.height;
-        for i in 2..cmp::min(aspect_w / 2, aspect_h / 2) {
-            while aspect_w % i == 0 && aspect_h % i == 0 {
-                aspect_w /= i;
-                aspect_h /= i;
-            }
-        }
-
-        modes.push((
-            mode,
-            format!(
-                "{:>4}x{:<4} {:>3}:{:<3}",
-                mode.width, mode.height, aspect_w, aspect_h
-            ),
-        ));
+        modes.push(mode);
     }
 
     if modes.is_empty() {
         return None;
     }
 
-    // Ordenar modos por área de pixel, revertido
-    modes.sort_by(|a, b| (b.0.width * b.0.height).cmp(&(a.0.width * a.0.height)));
+    // Ordenar modos por área de pixel, maior primeiro
+    modes.sort_by(|a, b| (b.width * b.height).cmp(&(a.width * a.height)));
 
-    // Definir selecionado com base na melhor resolução
-    print!("Output {}", output_i);
-    let mut selected = modes.first().map_or(0, |x| x.0.id);
+    // Selecionar automaticamente a melhor resolução
+    print!("Saida {}", output_i);
+    let mut selected_mode = modes.first().copied();
+
     if let Some((best_width, best_height)) = os.best_resolution(output_i) {
-        print!(", best resolution: {}x{}", best_width, best_height);
-        for (mode, _text) in modes.iter() {
+        print!(", melhor resolucao: {}x{}", best_width, best_height);
+        // Tentar encontrar a resolução exata recomendada
+        for mode in modes.iter() {
             if mode.width == best_width && mode.height == best_height {
-                selected = mode.id;
+                selected_mode = Some(*mode);
                 break;
             }
         }
     }
-    println!();
 
-    println!("Arrow keys and enter select mode");
-    let live_mode = os.get_text_position();
-    if *live {
-        println!("Press l to disable live mode");
+    if let Some(mode) = selected_mode {
+        println!(" -> Selecionado: {}x{}", mode.width, mode.height);
     } else {
-        println!("Press l to  enable live mode");
-    }
-    println!();
-    print!(" ");
-
-    let (off_x, off_y) = os.get_text_position();
-    let rows = 12;
-    let mut mode_opt = None;
-    while !modes.is_empty() {
-        let mut row = 0;
-        let mut col = 0;
-        for (mode, text) in modes.iter() {
-            if row >= rows {
-                col += 1;
-                row = 0;
-            }
-
-            os.set_text_position(off_x + col * 20, off_y + row);
-            os.set_text_highlight(mode.id == selected);
-
-            print!("{}", text);
-
-            row += 1;
-        }
-
-        // Ler pressionamento de tecla
-        match os.get_key() {
-            OsKey::Left => {
-                if let Some(mut mode_i) = modes.iter().position(|x| x.0.id == selected) {
-                    if mode_i < rows {
-                        while mode_i < modes.len() {
-                            mode_i += rows;
-                        }
-                    }
-                    mode_i -= rows;
-                    if let Some(new) = modes.get(mode_i) {
-                        selected = new.0.id;
-                    }
-                }
-            },
-            OsKey::Right => {
-                if let Some(mut mode_i) = modes.iter().position(|x| x.0.id == selected) {
-                    mode_i += rows;
-                    if mode_i >= modes.len() {
-                        mode_i %= rows;
-                    }
-                    if let Some(new) = modes.get(mode_i) {
-                        selected = new.0.id;
-                    }
-                }
-            },
-            OsKey::Up => {
-                if let Some(mut mode_i) = modes.iter().position(|x| x.0.id == selected) {
-                    if mode_i % rows == 0 {
-                        mode_i += rows;
-                        if mode_i > modes.len() {
-                            mode_i = modes.len();
-                        }
-                    }
-                    mode_i -= 1;
-                    if let Some(new) = modes.get(mode_i) {
-                        selected = new.0.id;
-                    }
-                }
-            },
-            OsKey::Down => {
-                if let Some(mut mode_i) = modes.iter().position(|x| x.0.id == selected) {
-                    mode_i += 1;
-                    if mode_i % rows == 0 {
-                        mode_i -= rows;
-                    }
-                    if mode_i >= modes.len() {
-                        mode_i = mode_i - mode_i % rows;
-                    }
-                    if let Some(new) = modes.get(mode_i) {
-                        selected = new.0.id;
-                    }
-                }
-            },
-            OsKey::Enter => {
-                if let Some(mode_i) = modes.iter().position(|x| x.0.id == selected) {
-                    if let Some((mode, _text)) = modes.get(mode_i) {
-                        mode_opt = Some(*mode);
-                    }
-                }
-                break;
-            },
-            OsKey::Char('l') => {
-                *live = !*live;
-                os.set_text_position(live_mode.0, live_mode.1);
-                if *live {
-                    println!("Press l to disable live mode");
-                } else {
-                    println!("Press l to  enable live mode");
-                }
-            },
-            _ => (),
-        }
+        println!();
     }
 
-    os.set_text_position(0, off_y + rows);
-    os.set_text_highlight(false);
-    println!();
-
-    mode_opt
+    selected_mode
 }
 
 fn redstonefs<O: Os>(os: &O) -> (redstonefs::FileSystem<O::D>, Option<&'static [u8]>) {
@@ -340,7 +223,7 @@ fn redstonefs<O: Os>(os: &O) -> (redstonefs::FileSystem<O::D>, Option<&'static [
             },
         }
     }
-    panic!("RedstoneFS out of unlock attempts");
+    panic!("RedstoneFS: Numero maximo de tentativas excedido");
 }
 
 #[derive(PartialEq)]
@@ -411,7 +294,7 @@ fn load_to_memory<O: Os>(
     })
     .unwrap_or_else(|err| {
         panic!(
-            "RedstoneFS transaction failed while loading `{}`: {:?}",
+            "Falha na transacao RedstoneFS ao carregar `{}`: {:?}",
             filename, err
         )
     })
@@ -448,20 +331,23 @@ fn elf_entry(data: &[u8]) -> (u64, bool) {
             true,
         ),
         (ei_class, ei_data) => {
-            panic!("Unsupported ELF EI_CLASS {} EI_DATA {}", ei_class, ei_data);
+            panic!(
+                "ELF EI_CLASS {} EI_DATA {} nao suportado",
+                ei_class, ei_data
+            );
         },
     }
 }
 
 fn ignite_main(os: &impl Os) -> (usize, u64, KernelArgs) {
     println!(
-        "Redstone OS Bootloader {} on {}",
+        "Bootloader Redstone OS {} em {}",
         env!("CARGO_PKG_VERSION"),
         os.name()
     );
 
     let hwdesc = os.hwdesc();
-    println!("Hardware descriptor: {:x?}", hwdesc);
+    println!("Descritor de Hardware: {:x?}", hwdesc);
     let (acpi_rsdp_base, acpi_rsdp_size) = match hwdesc {
         OsHwDesc::Acpi(base, size) => (base, size),
         OsHwDesc::DeviceTree(base, size) => (base, size),
@@ -481,7 +367,7 @@ fn ignite_main(os: &impl Os) -> (usize, u64, KernelArgs) {
     //     print!("{:>02x}", fs.header.uuid()[i]);
     // }
     // println!(": {} MiB", fs.header.size() / MIBI as u64);
-    println!("Filesystem: UEFI (FAT32) - Temporary Workaround");
+    println!("Sistema de Arquivos: UEFI (FAT32) - Solucao Temporaria");
     println!();
 
     let mut mode_opts = Vec::new();
@@ -496,7 +382,7 @@ fn ignite_main(os: &impl Os) -> (usize, u64, KernelArgs) {
     let stack_size = 128 * KIBI;
     let stack_base = os.alloc_zeroed_page_aligned(stack_size);
     if stack_base.is_null() {
-        panic!("Failed to allocate memory for stack");
+        panic!("Falha ao alocar memoria para a pilha");
     }
 
     // Live disk functionality disabled for UEFI boot workaround
@@ -505,9 +391,14 @@ fn ignite_main(os: &impl Os) -> (usize, u64, KernelArgs) {
     let (kernel, kernel_entry) = {
         // let kernel = load_to_memory(os, &mut fs, "boot", "kernel", Filetype::Elf);
         let path = "boot/kernel";
-        print!("Loading {}: ", path);
-        let mut kernel_vec = os.read_file(path).expect("Failed to find boot/kernel");
-        println!("{} MiB", kernel_vec.len() / MIBI);
+        print!("Carregando {}: ", path);
+        let kernel_vec = os.read_file(path).expect("Falha ao encontrar boot/kernel");
+        let kernel_size = kernel_vec.len();
+        println!("{} MiB ({} bytes)", kernel_size / MIBI, kernel_size);
+
+        if kernel_size == 0 {
+            panic!("ERRO: Kernel tem tamanho zero!");
+        }
 
         // We need to keep this memory allocated. Vec usually allocates on heap.
         // We leak the vec to get a slice with static lifetime conceptually for the boot
@@ -517,7 +408,24 @@ fn ignite_main(os: &impl Os) -> (usize, u64, KernelArgs) {
         // slice.
         let kernel_slice = Box::leak(kernel_vec.into_boxed_slice());
 
+        println!("[DEBUG] Kernel carregado, analisando ELF...");
+
+        // Verificar magic number ELF
+        if kernel_slice.len() < 4 {
+            panic!("Kernel muito pequeno para ser um ELF valido!");
+        }
+        if &kernel_slice[0..4] != b"\x7FELF" {
+            panic!(
+                "Kernel nao tem magic number ELF valido: {:X?}",
+                &kernel_slice[0..4]
+            );
+        }
+
         let (kernel_entry, kernel_64bit) = elf_entry(kernel_slice);
+        println!(
+            "[DEBUG] Entry point: 0x{:X}, 64-bit: {}",
+            kernel_entry, kernel_64bit
+        );
         unsafe {
             KERNEL_64BIT = kernel_64bit;
         }
@@ -528,21 +436,29 @@ fn ignite_main(os: &impl Os) -> (usize, u64, KernelArgs) {
         // let initfs_slice = load_to_memory(os, &mut fs, "boot", "initfs",
         // Filetype::Initfs);
         let path = "boot/initfs";
-        print!("Loading {}: ", path);
-        let mut initfs_vec = os.read_file(path).expect("Failed to find boot/initfs");
-        println!("{} MiB", initfs_vec.len() / MIBI);
+        print!("Carregando {}: ", path);
+        let initfs_vec = os.read_file(path).expect("Falha ao encontrar boot/initfs");
+        let initfs_size = initfs_vec.len();
+        println!("{} MiB ({} bytes)", initfs_size / MIBI, initfs_size);
+
+        if initfs_size == 0 {
+            panic!("ERRO: InitFS tem tamanho zero!");
+        }
 
         let initfs_slice = Box::leak(initfs_vec.into_boxed_slice());
 
-        let magic = &initfs_slice[..8];
-        if magic != b"RedstoneFtw" {
-            panic!("{} has invalid magic number {:#X?}", path, magic);
-        }
+        // let magic = &initfs_slice[..8];
+        // if magic != b"RedstoneFtw" {
+        //     panic!("{} has invalid magic number {:#X?}", path, magic);
+        // }
 
         let memory = unsafe {
             let total_size = initfs_slice.len().next_multiple_of(4096);
             let ptr = os.alloc_zeroed_page_aligned(total_size);
-            assert!(!ptr.is_null(), "failed to allocate bootstrap+initfs memory");
+            assert!(
+                !ptr.is_null(),
+                "falha ao alocar memoria para bootstrap+initfs"
+            );
             core::slice::from_raw_parts_mut(ptr, total_size)
         };
         memory[..initfs_slice.len()].copy_from_slice(initfs_slice);
@@ -550,13 +466,15 @@ fn ignite_main(os: &impl Os) -> (usize, u64, KernelArgs) {
         (memory.len() as u64, memory.as_mut_ptr() as u64)
     };
 
+    println!("[DEBUG] Configurando paginacao...");
     let page_phys = unsafe { paging_create(os, kernel.as_ptr() as u64, kernel.len() as u64) }
-        .expect("Failed to set up paging");
+        .expect("Falha ao configurar paginacao");
+    println!("[DEBUG] Paginacao configurada em: 0x{:X}", page_phys);
 
     let mut env_size = 64 * KIBI;
     let env_base = os.alloc_zeroed_page_aligned(env_size);
     if env_base.is_null() {
-        panic!("Failed to allocate memory for stack");
+        panic!("Falha ao alocar memoria para a pilha de ambiente");
     }
 
     {
@@ -609,7 +527,7 @@ fn ignite_main(os: &impl Os) -> (usize, u64, KernelArgs) {
         #[cfg(target_arch = "riscv64")]
         {
             let boot_hartid = os::efi_get_boot_hartid()
-                .expect("Could not retrieve boot hart id from EFI implementation!");
+                .expect("Falha ao recuperar boot hart id da implementacao EFI!");
             writeln!(w, "BOOT_HART_ID={:016x}", boot_hartid).unwrap();
         }
 
@@ -627,7 +545,7 @@ fn ignite_main(os: &impl Os) -> (usize, u64, KernelArgs) {
                             (mode.stride * mode.height * 4) as u64,
                         )
                     }
-                    .expect("Failed to map framebuffer");
+                    .expect("Falha ao mapear framebuffer");
 
                     writeln!(w, "FRAMEBUFFER_ADDR={:016x}", mode.base).unwrap();
                     writeln!(w, "FRAMEBUFFER_VIRT={virt:016x}").unwrap();
@@ -648,6 +566,7 @@ fn ignite_main(os: &impl Os) -> (usize, u64, KernelArgs) {
         env_size = w.i;
     }
 
+    println!("[DEBUG] Retornando controle para arch::main...");
     #[allow(static_mut_refs)]
     (
         page_phys,

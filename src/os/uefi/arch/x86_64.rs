@@ -20,12 +20,16 @@ unsafe extern "C" fn kernel_entry(
     args: *const KernelArgs,
 ) -> ! {
     unsafe {
+        uefi_services::println!("[DEBUG] kernel_entry: Saindo de Boot Services...");
         // Read memory map and exit boot services
         memory_map().exit_boot_services();
 
+        // IMPORTANTE: Apos exit_boot_services(), nao podemos mais usar
+        // uefi_services::println! porque os servicos UEFI foram desligados.
+        // Qualquer tentativa de usar println aqui causara um travamento.
+
         // Enable FXSAVE/FXRSTOR, Page Global, Page Address Extension, and Page Size
         // Extension
-        // x86_64 crate: Cr4::read() returns Cr4Flags
         let mut cr4 = Cr4::read();
         cr4 |= Cr4Flags::OSFXSR
             | Cr4Flags::PAGE_GLOBAL
@@ -34,14 +38,12 @@ unsafe extern "C" fn kernel_entry(
         Cr4::write(cr4);
 
         // Enable Long mode and NX bit
-        // Efer::read() -> EferFlags
         let mut efer = Efer::read();
         efer |= x86_64::registers::model_specific::EferFlags::LONG_MODE_ENABLE
             | x86_64::registers::model_specific::EferFlags::NO_EXECUTE_ENABLE;
         unsafe { Efer::write(efer) };
 
         // Set new page map
-        // Cr3::write(pml4_frame, flags)
         let phys_frame = PhysFrame::containing_address(PhysAddr::new(page_phys as u64));
         Cr3::write(phys_frame, Cr3::read().1);
 
@@ -79,6 +81,8 @@ pub fn main() -> Result<()> {
 
     let (page_phys, func, args) = crate::ignite_main(&mut os);
 
+    uefi_services::println!("[DEBUG] Preparando para saltar para o kernel...");
+    uefi_services::println!("[DEBUG] page_phys=0x{:X}, func=0x{:X}", page_phys, func);
     unsafe {
         kernel_entry(
             page_phys,

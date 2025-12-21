@@ -49,7 +49,7 @@ pub(crate) fn page_size() -> usize {
 static mut IMAGE_HANDLE: Option<Handle> = None;
 
 pub fn image_handle() -> Handle {
-    unsafe { IMAGE_HANDLE.expect("Image handle not initialized") }
+    unsafe { IMAGE_HANDLE.expect("Image handle nao inicializado") }
 }
 
 pub(crate) fn alloc_zeroed_page_aligned(size: usize) -> *mut u8 {
@@ -138,9 +138,11 @@ impl OsEfi {
         // Get the LoadedImage protocol to find out which device we were loaded from
         let loaded_image_ref = boot_services
             .open_protocol_exclusive::<uefi::proto::loaded_image::LoadedImage>(image_handle())
-            .expect("Failed to get LoadedImage protocol");
+            .expect("Falha ao obter protocolo LoadedImage");
         let unsafe_loaded_image = &*loaded_image_ref;
-        let device_handle = unsafe_loaded_image.device().expect("Device handle is None");
+        let device_handle = unsafe_loaded_image
+            .device()
+            .expect("Handle do dispositivo e None");
 
         // Open the SimpleFileSystem protocol on that device
         let mut sfs_ref = boot_services
@@ -154,7 +156,7 @@ impl OsEfi {
         // Open the file
         // Note: UEFI paths use backslashes, but we accept forward slashes
         let uefi_path = path.replace('/', "\\");
-        let path_cstr = CString16::try_from(uefi_path.as_str()).expect("Invalid path");
+        let path_cstr = CString16::try_from(uefi_path.as_str()).expect("Caminho invalido");
         let file_handle = root_dir
             .open(
                 &path_cstr,
