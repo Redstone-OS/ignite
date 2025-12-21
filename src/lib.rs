@@ -26,6 +26,12 @@
 
 extern crate alloc;
 
+mod bump_allocator;
+
+// Global allocator - Static Bump Allocator (independente de UEFI boot services)
+#[global_allocator]
+static ALLOCATOR: bump_allocator::BumpAllocator = bump_allocator::BumpAllocator::new();
+
 pub mod boot_info;
 pub mod config;
 pub mod elf;
@@ -42,7 +48,7 @@ pub mod video;
 
 // use crate::config::BootConfig; // TODO: Debug
 use log::info;
-use uefi::{prelude::*, table::boot::MemoryType};
+use uefi::{mem::memory_map::MemoryMap, prelude::*, table::boot::MemoryType};
 
 // use crate::security::{IntegrityChecker, RollbackProtection, SecureBootManager}; // TODO:
 // Debug
@@ -68,8 +74,56 @@ use crate::{
 /// # Retorna
 /// Nunca retorna - transfere o controle para o kernel
 pub fn boot(image_handle: Handle, mut system_table: SystemTable<Boot>) -> ! {
-    // Inicializar serviços UEFI
-    uefi::helpers::init(&mut system_table).unwrap();
+    // Debug: bootloader started
+    unsafe {
+        let port: u16 = 0x3F8;
+        for &byte in b"[1/20] Boot started\r\n" {
+            core::arch::asm!("out dx, al", in("dx") port, in("al") byte);
+        }
+    }
+
+    // Inicializar serviços UEFI (API 0.31: init() não recebe argumentos)
+    uefi::helpers::init().unwrap();
+
+    unsafe {
+        let port: u16 = 0x3F8;
+        for &byte in b"[2/20] UEFI init OK\r\n" {
+            core::arch::asm!("out dx, al", in("dx") port, in("al") byte);
+        }
+    }
+
+    // CRÍTICO: Pré-alocar heap estática VIA UEFI allocate_pages
+    // Isso garante que temos memória própria que sobrevive a exit_boot_services
+    let boot_services = system_table.boot_services();
+    let heap_pages = bump_allocator::HEAP_SIZE / 4096;
+
+    unsafe {
+        let port: u16 = 0x3F8;
+        for &byte in b"[3/20] Allocating static heap...\r\n" {
+            core::arch::asm!("out dx, al", in("dx") port, in("al") byte);
+        }
+    }
+
+    let heap_start = boot_services
+        .allocate_pages(
+            uefi::table::boot::AllocateType::AnyPages,
+            MemoryType::LOADER_DATA,
+            heap_pages,
+        )
+        .expect("Failed to allocate static heap for bump allocator")
+        .cast::<u8>()
+        .as_ptr() as usize;
+
+    // Inicializar bump allocator com heap pré-alocada
+    unsafe {
+        ALLOCATOR.init(heap_start, bump_allocator::HEAP_SIZE);
+
+        let port: u16 = 0x3F8;
+        for &byte in b"[4/20] Bump allocator initialized\r\n" {
+            core::arch::asm!("out dx, al", in("dx") port, in("al") byte);
+        }
+    }
+
     system_table.stdout().reset(false).unwrap();
 
     info!("═══════════════════════════════════════════════════");
@@ -174,12 +228,9 @@ pub fn boot(image_handle: Handle, mut system_table: SystemTable<Boot>) -> ! {
     let memory_map_addr = (boot_info_addr + BOOT_INFO_SIZE as u64) as usize;
     const MAX_REGIONS: usize = 256;
 
-    // Obter memory map da UEFI
-    let map_size = boot_services.memory_map_size();
-    let mut map_buffer = alloc::vec![0u8; map_size.map_size + 10 * map_size.entry_size];
-    let memory_map = boot_services
-        .memory_map(&mut map_buffer)
-        .expect("Failed to get UEFI memory map");
+    // Obter memory map da UEFI usando nova API freestanding 0.31
+    let memory_map =
+        uefi::boot::memory_map(MemoryType::LOADER_DATA).expect("Failed to get UEFI memory map");
 
     // Converter para nosso formato
     let memory_regions = unsafe {
@@ -262,10 +313,12 @@ pub fn boot(image_handle: Handle, mut system_table: SystemTable<Boot>) -> ! {
 
     info!("Chamando exit_boot_services...");
 
-    // 10. Sair dos serviços de boot
+    // 10. Sair dos serviços de boot usando nova API freestanding 0.31
     // TODO: Se boot for bem-sucedido (kernel assume controle),
     // resetar contador de tentativas em próximo boot
-    let (_rt, _map) = system_table.exit_boot_services(MemoryType::LOADER_DATA);
+    unsafe {
+        let _ = uefi::boot::exit_boot_services(MemoryType::LOADER_DATA);
+    }
 
     // 11. Saltar para o kernel usando função naked
     // IMPORTANTE: Inline assembly não funciona, usar naked function

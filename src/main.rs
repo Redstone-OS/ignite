@@ -12,6 +12,12 @@ mod redstonefs;
 
 extern crate alloc;
 
+mod bump_allocator;
+
+// Global allocator - Static Bump Allocator (independente de UEFI boot services)
+#[global_allocator]
+static ALLOCATOR: bump_allocator::BumpAllocator = bump_allocator::BumpAllocator::new();
+
 // Panic handler para no_std com serial output detalhado
 #[panic_handler]
 fn panic(info: &core::panic::PanicInfo) -> ! {

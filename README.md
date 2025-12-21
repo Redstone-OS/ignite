@@ -1,6 +1,6 @@
 # Ignite - Bootloader UEFI do Redstone OS
 
-**Versão**: 0.4.1  
+**Versão**: 0.4.0  
 **Linguagem**: Rust (no_std)  
 **Arquitetura**: x86_64 (UEFI)  
 **Status**: Em desenvolvimento ativo (Funcional para Boot UEFI/FAT32)  
