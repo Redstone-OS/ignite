@@ -61,8 +61,8 @@ pub enum FileSystemError {
     UnsupportedFsType,
     InvalidSize,
     NotRegularFile,
-    bufferTooSmall,
-    DeviceError, // Re-mapa de IO se necessário no contexto de FS
+    BufferTooSmall, // Capitalização corrigida
+    DeviceError,    // Re-mapa de IO se necessário no contexto de FS
 }
 
 /// Erros de Memória.
@@ -111,14 +111,14 @@ pub enum VideoError {
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub enum ConfigError {
     NotFound,
-    ParseError,  // Renomeado de ParseFailed para consistência
-    ParseFailed, // Mantido para compatibilidade se usado
+    ParseError,
+    ParseFailed, // Mantido para compatibilidade
     InvalidKey,
     ValueOutOfRange,
-    Invalid(&'static str), // Para mensagens customizadas
+    Invalid(&'static str),
 }
 
-// --- Implementações de Conversão (Syntactic Sugar) ---
+// --- Conversões Automáticas (Syntactic Sugar para '?') ---
 
 impl From<crate::uefi::Status> for BootError {
     fn from(s: crate::uefi::Status) -> Self {
@@ -180,31 +180,33 @@ impl fmt::Display for BootError {
     }
 }
 
-// Display para sub-erros (simplificado para debug)
+// Implementações simples de Display para os sub-enums para satisfazer o
+// Debug/Display do pai
+impl fmt::Display for IoError {
+    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
+        write!(f, "{:?}", self)
+    }
+}
 impl fmt::Display for FileSystemError {
     fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
         write!(f, "{:?}", self)
     }
 }
-
 impl fmt::Display for MemoryError {
     fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
         write!(f, "{:?}", self)
     }
 }
-
 impl fmt::Display for ElfError {
     fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
         write!(f, "{:?}", self)
     }
 }
-
 impl fmt::Display for VideoError {
     fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
         write!(f, "{:?}", self)
     }
 }
-
 impl fmt::Display for ConfigError {
     fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
         write!(f, "{:?}", self)
