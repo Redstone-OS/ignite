@@ -45,12 +45,12 @@ pub mod recovery;
 pub mod security;
 pub mod serial; // Wrapper de serial configurável
 pub mod types;
+pub mod uefi; // Nossa implementação UEFI pura (sem dependências externas)
 pub mod ui;
 pub mod video;
 
 // use crate::config::BootConfig; // TODO: Debug
 use log::info;
-use uefi::{mem::memory_map::MemoryMap, prelude::*, table::boot::MemoryType};
 
 // use crate::security::{IntegrityChecker, RollbackProtection, SecureBootManager}; // TODO:
 // Debug
@@ -62,6 +62,10 @@ use crate::{
     fs::FileLoader,
     memory::MemoryAllocator,
     recovery::{Diagnostics, KeyDetector},
+    uefi::{
+        BootServices, Handle,
+        table::{boot::MemoryType, system::SystemTable},
+    },
 };
 
 /// Função principal do bootloader
@@ -75,7 +79,7 @@ use crate::{
 ///
 /// # Retorna
 /// Nunca retorna - transfere o controle para o kernel
-pub fn boot(image_handle: Handle, mut system_table: SystemTable<Boot>) -> ! {
+pub fn boot(image_handle: Handle, system_table: *mut SystemTable) -> ! {
     // Debug: bootloader started
     unsafe {
         let port: u16 = 0x3F8;
@@ -85,7 +89,7 @@ pub fn boot(image_handle: Handle, mut system_table: SystemTable<Boot>) -> ! {
     }
 
     // Inicializar serviços UEFI (API 0.31: init() não recebe argumentos)
-    uefi::helpers::init().unwrap();
+    // Inicializar UEFI (sem helpers externos)
 
     unsafe {
         let port: u16 = 0x3F8;
@@ -106,19 +110,20 @@ pub fn boot(image_handle: Handle, mut system_table: SystemTable<Boot>) -> ! {
         }
     }
 
-    let heap_start = boot_services
-        .allocate_pages(
-            uefi::table::boot::AllocateType::AnyPages,
-            MemoryType::LOADER_DATA,
-            heap_pages,
-        )
-        .expect("Failed to allocate static heap for bump allocator")
-        .cast::<u8>()
-        .as_ptr() as usize;
+    // Alocar heap estática para bump allocator
+    let heap_start = unsafe {
+        boot_services
+            .allocate_pages_helper(
+                crate::uefi::table::boot::AllocateType::AllocateAnyPages,
+                MemoryType::LoaderData,
+                heap_pages,
+            )
+            .expect("Failed to allocate static heap for bump allocator") as *mut u8
+    };
 
     // Inicializar bump allocator com heap pré-alocada
     unsafe {
-        ALLOCATOR.init(heap_start, bump_allocator::HEAP_SIZE);
+        ALLOCATOR.init();
 
         let port: u16 = 0x3F8;
         for &byte in b"[4/20] Bump allocator initialized\r\n" {
@@ -126,16 +131,23 @@ pub fn boot(image_handle: Handle, mut system_table: SystemTable<Boot>) -> ! {
         }
     }
 
-    system_table.stdout().reset(false).unwrap();
+    // Clear screen
+    unsafe {
+        let st = &*system_table;
+        let stdout = &mut *st.con_out;
+        (stdout.reset)(stdout, crate::uefi::FALSE);
+    }
 
     info!("═══════════════════════════════════════════════════");
-    info!("  Bootloader Ignite v0.4.0 - Redstone OS");
+    info!("║         Ignite UEFI Bootloader v0.4.0           ║");
+    info!("║            Redstone OS Boot Manager              ║");
     info!("═══════════════════════════════════════════════════");
 
     // Mostrar hint de tecla de recovery
     KeyDetector::show_recovery_hint();
 
-    let boot_services = system_table.boot_services();
+    // Obter boot services do system table
+    let boot_services = unsafe { &*(*system_table).boot_services };
 
     // 1. Criar alocador de memória
     let allocator = MemoryAllocator::new(boot_services);
@@ -232,7 +244,9 @@ pub fn boot(image_handle: Handle, mut system_table: SystemTable<Boot>) -> ! {
 
     // Obter memory map da UEFI usando nova API freestanding 0.31
     let memory_map =
-        uefi::boot::memory_map(MemoryType::LOADER_DATA).expect("Failed to get UEFI memory map");
+        // TODO: Implementar memorymap usando nossa camada UEFI
+        // let memory_map = ...; // uefi::boot::memory_map not implemented yet
+        log::warn!("Memory map retrieval not yet implemented with pure UEFI");
 
     // Converter para nosso formato
     let memory_regions = unsafe {
@@ -319,7 +333,9 @@ pub fn boot(image_handle: Handle, mut system_table: SystemTable<Boot>) -> ! {
     // TODO: Se boot for bem-sucedido (kernel assume controle),
     // resetar contador de tentativas em próximo boot
     unsafe {
-        let _ = uefi::boot::exit_boot_services(MemoryType::LOADER_DATA);
+        // TODO: Implementar exit_boot_services usando nossa camada UEFI
+        // let _ = system_table.exit_boot_services(...);
+        log::warn!("exit_boot_services not yet implemented with pure UEFI");
     }
 
     // 11. Saltar para o kernel usando função naked
@@ -430,7 +446,7 @@ fn create_default_config() -> config::types::BootConfig {
     use crate::constants::{boot::BOOT_DELAY_SECONDS, paths::*};
 
     let mut config = BootConfig {
-        timeout:              Some(BOOT_DELAY_SECONDS), // 3 segundos para permitir tecla M
+        timeout:              Some(3), // 3 segundos para permitir tecla M
         default_entry:        1,
         quiet:                false,
         serial:               true, // Serial ligado por padrão
@@ -491,7 +507,7 @@ fn select_boot_entry(boot_services: &BootServices, config: &config::types::BootC
 
     // Countdown aguardando tecla M
     let timeout = config.timeout.unwrap_or(3);
-    let show_menu = BootMenu::wait_for_trigger(boot_services, timeout);
+    let show_menu = BootMenu::wait_for_trigger(boot_services, timeout.into());
 
     if show_menu {
         // Usuário pressionou M - mostrar menu interativo

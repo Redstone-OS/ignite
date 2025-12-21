@@ -2,7 +2,7 @@
 //!
 //! Permite ao usuário pressionar teclas para entrar em modos especiais
 
-use uefi::table::boot::BootServices;
+use crate::uefi::BootServices;
 
 /// Verifica se uma tecla especial foi pressionada
 pub struct KeyDetector;

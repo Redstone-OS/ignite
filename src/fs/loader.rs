@@ -2,20 +2,22 @@
 
 extern crate alloc;
 
-use uefi::{
-    prelude::*,
-    proto::media::file::{Directory, File, FileAttribute, FileInfo, FileMode},
-};
-
 use crate::{
     error::{BootError, FileSystemError, Result},
     memory::MemoryAllocator,
     types::LoadedFile,
+    uefi::{
+        Handle, Status,
+        proto::media::{
+            file::{FILE_INFO_GUID, FILE_MODE_READ, FileInfo, FileProtocol},
+            fs::SimpleFileSystemProtocol,
+        },
+    },
 };
 
 /// Carregador de arquivos UEFI
 pub struct FileLoader<'a> {
-    root:      Directory,
+    root:      *mut FileProtocol, // Changed from Directory - using raw pointer temporarily
     allocator: &'a MemoryAllocator<'a>,
 }
 
@@ -27,18 +29,15 @@ impl<'a> FileLoader<'a> {
     /// * `image_handle` - Handle da imagem do bootloader
     /// * `allocator` - Alocador de memória
     pub fn new(
-        boot_services: &BootServices,
+        boot_services: &crate::uefi::BootServices,
         image_handle: Handle,
         allocator: &'a MemoryAllocator<'a>,
     ) -> Result<Self> {
-        // Obter sistema de arquivos da imagem
-        let root = boot_services
-            .get_image_file_system(image_handle)
-            .map_err(|_| BootError::FileSystem(FileSystemError::VolumeOpenError))?
-            .open_volume()
-            .map_err(|_| BootError::FileSystem(FileSystemError::VolumeOpenError))?;
+        // TODO: Implementar quando locate_protocol e open_volume estiverem prontos
+        log::warn!("FileLoader::new not fully implemented - filesystem access not available yet");
 
-        Ok(Self { root, allocator })
+        // Por enquanto, retorna erro
+        Err(BootError::FileSystem(FileSystemError::VolumeOpenError))
     }
 
     /// Carrega um arquivo na memória
@@ -62,16 +61,18 @@ impl<'a> FileLoader<'a> {
         // 2. Substituir / por \ (padrão UEFI)
         path_str = path_str.replace('/', "\\");
 
-        // 3. Remover \ inicial se houver (muitos firmwares preferem caminhos relativos à raiz)
+        // 3. Remover \ inicial se houver (muitos firmwares preferem caminhos relativos
+        //    à raiz)
         if path_str.starts_with('\\') {
             path_str.remove(0);
         }
 
         log::info!("Caminho processado: '{}' -> '{}'", filename, path_str);
 
-        // Converter filename UTF-8 para UTF-16 (CStr16)
-        // UEFI usa UTF-16, então precisamos converter
-        use uefi::CStr16;
+        // TODO: Implementar CStr16 (UTF-16 strings) ou usar alternativa
+        // Por enquanto, carregamento não implementado
+        log::warn!("load_file: CStr16 conversion not yet implemented");
+        Err(BootError::FileSystem(FileSystemError::InvalidPath))?;
 
         // Criar buffer UTF-16 no stack (256 u16s = 512 bytes)
         let mut utf16_buf = [0u16; 256];

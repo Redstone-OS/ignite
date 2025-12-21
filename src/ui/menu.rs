@@ -7,16 +7,14 @@
 //! - ESC para cancelar
 
 use log::info;
-use uefi::{
-    proto::console::text::{Key, ScanCode},
-    table::boot::BootServices,
-};
 
 use crate::{
     config::types::{BootConfig, MenuEntry},
-    constants::{boot::MENU_TRIGGER_KEY, ui::*},
-    error::Result,
     types::Framebuffer,
+    uefi::{
+        BootServices,
+        table::system::{InputKey, SCAN_DOWN, SCAN_ESC, SCAN_UP},
+    },
 };
 
 /// Menu de boot interativo
@@ -81,19 +79,15 @@ impl<'a> BootMenu<'a> {
             }
 
             // Verificar se há tecla pressionada
-            match stdin.read_key() {
-                Ok(Some(key)) => match key {
-                    Key::Printable(c) if c.0 == 'M' as u16 || c.0 == 'm' as u16 => {
-                        info!("Tecla M detectada! Abrindo menu interativo...");
-                        return true;
-                    },
-                    _ => {},
-                },
-                _ => {},
-            }
+            // TODO: Implementar read_key usando InputProtocol
+            // Por enquanto, timeout simples
+            let _ = unsafe { (boot_services.stall)(50_000) }; // 50ms
+
+            // TODO: Check para tecla 'M' não implementado ainda
+            // Aguardando implementação de read_key
 
             // Aguardar 100ms (100,000 microsegundos)
-            boot_services.stall(tick_interval_ms * 1000);
+            let _ = boot_services.stall_helper(tick_interval_ms * 1000);
         }
 
         info!("Iniciando boot automático...");
@@ -204,7 +198,11 @@ impl<'a> BootMenu<'a> {
 
         loop {
             match stdin.read_key() {
-                Ok(Some(key)) => {
+                Ok(Some(_key)) => {
+                    // TODO: Implementar quando InputKey wrapper estiver completo
+                    // Por enquanto retorna Select
+                    return MenuAction::Select;
+                    /*
                     return match key {
                         Key::Special(scan_code) => match scan_code {
                             ScanCode::UP => MenuAction::Up,
@@ -227,10 +225,11 @@ impl<'a> BootMenu<'a> {
                             continue;
                         },
                     };
+                    */
                 },
                 _ => {
                     // Aguardar um pouco antes de tentar novamente (50ms)
-                    self.boot_services.stall(50_000);
+                    let _ = self.boot_services.stall_helper(50_000);
                 },
             }
         }

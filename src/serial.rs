@@ -5,13 +5,11 @@
 
 use core::sync::atomic::{AtomicBool, Ordering};
 
-use crate::{constants::serial::COM1_PORT, io::Pio, serial_16550::SerialPort};
+use crate::constants::serial::COM1_PORT;
 
 /// Flag global que controla se serial está ativado
 static SERIAL_ENABLED: AtomicBool = AtomicBool::new(true); // Ligado por padrão
-
-/// Porta serial global (COM1)
-static mut SERIAL_PORT: Option<SerialPort<Pio<u8>>> = None;
+static SERIAL_INITIALIZED: AtomicBool = AtomicBool::new(false);
 
 /// Inicializa a porta serial se habilitada
 pub fn init(enabled: bool) {
@@ -19,10 +17,21 @@ pub fn init(enabled: bool) {
 
     if enabled {
         unsafe {
-            let mut port = SerialPort::new(COM1_PORT);
-            port.init();
-            SERIAL_PORT = Some(port);
+            // Disable interrupts
+            outb(COM1_PORT + 1, 0x00);
+            // Enable DLAB
+            outb(COM1_PORT + 3, 0x80);
+            // Set divisor (115200 baud)
+            outb(COM1_PORT + 0, 0x01);
+            outb(COM1_PORT + 1, 0x00);
+            // 8 bits, no parity, one stop bit
+            outb(COM1_PORT + 3, 0x03);
+            // Enable FIFO
+            outb(COM1_PORT + 2, 0xC7);
+            // Enable IRQs, set RTS/DSR
+            outb(COM1_PORT + 4, 0x0B);
         }
+        SERIAL_INITIALIZED.store(true, Ordering::Relaxed);
     }
 }
 
@@ -38,7 +47,7 @@ pub fn disable() {
 
 /// Verifica se serial está habilitado
 pub fn is_enabled() -> bool {
-    SERIAL_ENABLED.load(Ordering::Relaxed)
+    SERIAL_ENABLED.load(Ordering::Relaxed) && SERIAL_INITIALIZED.load(Ordering::Relaxed)
 }
 
 /// Envia uma string para serial (apenas se habilitado)
@@ -47,9 +56,9 @@ pub fn write_str(s: &str) {
         return;
     }
 
-    unsafe {
-        if let Some(port) = &mut SERIAL_PORT {
-            port.write(s.as_bytes());
+    for byte in s.bytes() {
+        unsafe {
+            write_byte(byte);
         }
     }
 }
@@ -60,11 +69,18 @@ pub fn write_bytes(bytes: &[u8]) {
         return;
     }
 
-    unsafe {
-        if let Some(port) = &mut SERIAL_PORT {
-            port.write(bytes);
+    for &byte in bytes {
+        unsafe {
+            write_byte(byte);
         }
     }
+}
+
+/// Escreve um byte na porta serial
+unsafe fn write_byte(byte: u8) {
+    // Wait for transmit buffer to be empty
+    while (inb(COM1_PORT + 5) & 0x20) == 0 {}
+    outb(COM1_PORT, byte);
 }
 
 /// Macro para output serial condicional
@@ -93,10 +109,29 @@ macro_rules! serial_outln {
 /// Não verifica se está habilitado - use com cuidado!
 #[inline]
 pub unsafe fn write_byte_raw(byte: u8) {
+    outb(COM1_PORT, byte);
+}
+
+/// Output byte to I/O port
+#[inline]
+unsafe fn outb(port: u16, val: u8) {
     core::arch::asm!(
         "out dx, al",
-        in("dx") COM1_PORT,
-        in("al") byte,
+        in("dx") port,
+        in("al") val,
         options(nostack, preserves_flags)
     );
+}
+
+/// Input byte from I/O port
+#[inline]
+unsafe fn inb(port: u16) -> u8 {
+    let val: u8;
+    core::arch::asm!(
+        "in al, dx",
+        out("al") val,
+        in("dx") port,
+        options(nostack, preserves_flags)
+    );
+    val
 }

@@ -72,9 +72,13 @@ pub enum MemoryError {
 /// Erros de configuração de vídeo
 #[derive(Debug)]
 pub enum VideoError {
+    /// Falha na inicialização
+    InitializationFailed,
     /// Nenhum handle GOP encontrado
     NoGopHandle,
     /// Falha ao abrir protocolo GOP
+    OpenProtocolFailed,
+    /// Falha anterior - mantido por compatibilidade
     GopOpenFailed,
     /// Modo de vídeo não suportado
     UnsupportedMode,
@@ -144,7 +148,9 @@ impl fmt::Display for MemoryError {
 impl fmt::Display for VideoError {
     fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
         match self {
+            VideoError::InitializationFailed => write!(f, "Falha ao inicializar vídeo"),
             VideoError::NoGopHandle => write!(f, "Nenhum handle GOP encontrado"),
+            VideoError::OpenProtocolFailed => write!(f, "Falha ao abrir protocolo GOP"),
             VideoError::GopOpenFailed => write!(f, "Falha ao abrir protocolo GOP"),
             VideoError::UnsupportedMode => write!(f, "Modo de vídeo não suportado"),
         }
@@ -161,13 +167,9 @@ impl fmt::Display for ConfigError {
     }
 }
 
-// Conversões de erros UEFI para nossos tipos
+// Conversões de erros externos para nossos tipos
 
-impl From<uefi::Error> for BootError {
-    fn from(_e: uefi::Error) -> Self {
-        BootError::Generic("Erro UEFI")
-    }
-}
+// uefi::Error conversion removido - não usamos mais uefi-rs externo
 
 impl From<goblin::error::Error> for BootError {
     fn from(_: goblin::error::Error) -> Self {

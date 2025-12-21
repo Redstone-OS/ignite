@@ -2,8 +2,13 @@
 //!
 //! Wrapper em torno dos serviços de alocação UEFI
 
-use crate::error::{BootError, MemoryError, Result};
-use uefi::table::boot::{AllocateType, BootServices, MemoryType};
+use crate::{
+    error::{BootError, MemoryError, Result},
+    uefi::{
+        BootServices,
+        table::boot::{AllocateType, MemoryType},
+    },
+};
 
 /// Alocador de memória que usa serviços UEFI
 pub struct MemoryAllocator<'a> {
@@ -24,14 +29,12 @@ impl<'a> MemoryAllocator<'a> {
     ///
     /// # Retorna
     /// Endereço físico da memória alocada
-    pub fn allocate_pages(
-        &self,
-        pages: usize,
-        alloc_type: AllocateType,
-    ) -> Result<u64> {
-        self.boot_services
-            .allocate_pages(alloc_type, MemoryType::LOADER_DATA, pages)
-            .map_err(|_| BootError::Memory(MemoryError::AllocationFailed))
+    pub fn allocate_pages(&self, pages: usize, alloc_type: AllocateType) -> Result<u64> {
+        unsafe {
+            self.boot_services
+                .allocate_pages_helper(alloc_type, MemoryType::LoaderData, pages)
+                .map_err(|_| BootError::Memory(MemoryError::AllocationFailed))
+        }
     }
 
     /// Aloca páginas em um endereço específico
@@ -48,7 +51,7 @@ impl<'a> MemoryAllocator<'a> {
     /// # Argumentos
     /// * `pages` - Número de páginas a alocar
     pub fn allocate_any(&self, pages: usize) -> Result<u64> {
-        self.allocate_pages(pages, AllocateType::AnyPages)
+        self.allocate_pages(pages, AllocateType::AllocateAnyPages)
     }
 
     /// Libera páginas de memória
@@ -59,7 +62,7 @@ impl<'a> MemoryAllocator<'a> {
     pub fn free_pages(&self, address: u64, pages: usize) -> Result<()> {
         unsafe {
             self.boot_services
-                .free_pages(address, pages)
+                .free_pages_helper(address, pages)
                 .map_err(|_| BootError::Memory(MemoryError::InvalidAddress))
         }
     }
