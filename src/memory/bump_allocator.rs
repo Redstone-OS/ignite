@@ -1,8 +1,7 @@
 //! Alocador Heap Estático (Bump Pointer)
 //!
-//! Implementa `GlobalAlloc`. É simples, determinístico e não fragmenta.
-//! Ideal para bootloaders que alocam muito e liberam tudo de uma vez
-//! (quando passam o controle pro kernel).
+//! Implementa `GlobalAlloc` de forma simples e segura para ambientes
+//! single-threaded.
 
 use core::{
     alloc::{GlobalAlloc, Layout},
@@ -10,74 +9,75 @@ use core::{
     ptr::null_mut,
 };
 
-use super::layout::BOOTLOADER_HEAP_SIZE;
-
-/// O símbolo `HEAP` reside na seção `.bss`.
-/// Garantimos alinhamento de 16 bytes para SIMD/SSE básico se necessário.
-#[repr(C, align(16))]
-struct HeapStorage([u8; BOOTLOADER_HEAP_SIZE]);
-
-static mut HEAP_MEMORY: HeapStorage = HeapStorage([0; BOOTLOADER_HEAP_SIZE]);
-
 /// Alocador "Bump" (Incremento Linear).
-///
-/// Funciona como uma pilha: `next` aponta para o próximo byte livre.
-/// Alocação é O(1) (só soma ponteiro). Desalocação é "no-op" (vazamento
-/// intencional).
 pub struct BumpAllocator {
-    next: UnsafeCell<usize>,
+    heap_start:  UnsafeCell<usize>,
+    heap_end:    UnsafeCell<usize>,
+    next:        UnsafeCell<usize>,
+    allocations: UnsafeCell<usize>,
 }
 
-// SAFETY: Bootloader é single-threaded neste estágio (UEFI main thread).
-// Se introduzirmos APs (Application Processors), precisaremos de um Mutex real.
+// SAFETY: O Bootloader UEFI roda em um único core/thread durante o boot
+// services.
 unsafe impl Sync for BumpAllocator {}
 
 impl BumpAllocator {
     pub const fn new() -> Self {
         Self {
-            next: UnsafeCell::new(0),
+            heap_start:  UnsafeCell::new(0),
+            heap_end:    UnsafeCell::new(0),
+            next:        UnsafeCell::new(0),
+            allocations: UnsafeCell::new(0),
         }
     }
 
-    /// Reinicia o alocador (perigoso, usar apenas em panic ou reset).
-    pub unsafe fn reset(&self) {
-        *self.next.get() = 0;
+    /// Inicializa o alocador com um bloco de memória.
+    ///
+    /// # Safety
+    /// O chamador deve garantir que o intervalo de memória [heap_start,
+    /// heap_start + heap_size) é válido e não está em uso.
+    pub unsafe fn init(&self, heap_start: usize, heap_size: usize) {
+        *self.heap_start.get() = heap_start;
+        *self.heap_end.get() = heap_start + heap_size;
+        *self.next.get() = heap_start;
     }
 }
 
 unsafe impl GlobalAlloc for BumpAllocator {
     unsafe fn alloc(&self, layout: Layout) -> *mut u8 {
-        let heap_start = &mut HEAP_MEMORY.0 as *mut u8 as usize;
-        let heap_end = heap_start + BOOTLOADER_HEAP_SIZE;
+        let heap_start = *self.heap_start.get();
+        let heap_end = *self.heap_end.get();
+        let mut next = *self.next.get();
 
-        let next_ptr = self.next.get();
-        let mut current_offset = *next_ptr;
-        let current_addr = heap_start + current_offset;
-
-        // Alinhamento: move o ponteiro para frente até satisfazer `layout.align()`
-        let align_offset = match current_addr % layout.align() {
-            0 => 0,
-            remainder => layout.align() - remainder,
-        };
-
-        // Overflow check (segurança industrial)
-        let new_offset = match current_offset.checked_add(align_offset + layout.size()) {
-            Some(o) => o,
-            None => return null_mut(), // Overflow aritmético
-        };
-
-        if heap_start + new_offset > heap_end {
-            return null_mut(); // Out of memory (OOM)
+        if heap_start == 0 {
+            return null_mut(); // Não inicializado
         }
 
-        // Commit da alocação
-        *next_ptr = new_offset;
-        (current_addr + align_offset) as *mut u8
+        let alloc_start = align_up(next, layout.align());
+        let alloc_end = match alloc_start.checked_add(layout.size()) {
+            Some(end) => end,
+            None => return null_mut(),
+        };
+
+        if alloc_end > heap_end {
+            return null_mut(); // OOM
+        }
+
+        *self.next.get() = alloc_end;
+        *self.allocations.get() += 1;
+
+        alloc_start as *mut u8
     }
 
     unsafe fn dealloc(&self, _ptr: *mut u8, _layout: Layout) {
-        // Bump allocator não libera memória individualmente.
-        // A memória é recuperada em massa quando o Kernel sobrescreve a região
-        // do Bootloader.
+        *self.allocations.get() -= 1;
+        if *self.allocations.get() == 0 {
+            *self.next.get() = *self.heap_start.get();
+        }
     }
+}
+
+/// Alinha o endereço para cima.
+fn align_up(addr: usize, align: usize) -> usize {
+    (addr + align - 1) & !(align - 1)
 }
