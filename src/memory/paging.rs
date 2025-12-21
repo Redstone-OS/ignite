@@ -7,7 +7,7 @@
 use super::allocator::FrameAllocator;
 use crate::core::error::{BootError, MemoryError, Result};
 
-// Constantes de flags x86_64 (bitmask)
+// Constantes de flags x86_64
 const PAGE_PRESENT: u64 = 1 << 0;
 const PAGE_WRITABLE: u64 = 1 << 1;
 const PAGE_HUGE: u64 = 1 << 7; // Em PD/PDPT significa página de 2MiB/1GiB
@@ -47,38 +47,31 @@ impl PageTableManager {
     /// Essencial para que o bootloader continue rodando após ligar paginação.
     pub fn identity_map(
         &mut self,
-        phys_addr: u64,
-        count: usize,
-        allocator: &mut impl FrameAllocator,
+        _phys_addr: u64,
+        _count: usize,
+        _allocator: &mut (impl FrameAllocator + ?Sized),
     ) -> Result<()> {
-        // Exemplo simplificado. Num código real, isso calcula os índices
-        // PML4 -> PDPT -> PD -> PT e preenche as entradas.
-        // Se usar huge pages (2MB), economiza memória de tabelas e TLB.
-
-        // TODO: Implementar walker de tabela.
-        // Se falhar em alocar uma subtabela, retorna Erro.
+        // TODO: Implementar walker
         Ok(())
     }
 
     /// Mapeia o Kernel no Higher Half.
-    /// phys: Onde o kernel está na RAM.
-    /// virt: O endereço virtual alvo (ex: 0xFFFF_8000...)
+    /// Aceita `?Sized` para permitir `dyn FrameAllocator` vindo do ElfLoader.
     pub fn map_kernel(
         &mut self,
         phys: u64,
         virt: u64,
         pages: usize,
-        allocator: &mut impl FrameAllocator,
+        _allocator: &mut (impl FrameAllocator + ?Sized),
     ) -> Result<()> {
-        // Validação de alinhamento
         if phys % 4096 != 0 || virt % 4096 != 0 {
             return Err(BootError::Memory(MemoryError::InvalidAlignment));
         }
 
-        // Loop de mapeamento
-        for i in 0..pages {
-            let offset = (i as u64) * 4096;
-            // self.map_page(virt + offset, phys + offset, flags)?;
+        // Loop placeholder para mapeamento
+        for _i in 0..pages {
+            // let offset = (i as u64) * 4096;
+            // self.map_page(...)
         }
         Ok(())
     }

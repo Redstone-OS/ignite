@@ -4,12 +4,12 @@ use core::ffi::c_void;
 
 use super::{
     framebuffer::{Framebuffer, FramebufferInfo},
-    mode::{VideoMode, VideoModeInfo},
+    mode::VideoMode,
     pixel::PixelFormat,
 };
 use crate::{
     core::error::{BootError, Result, VideoError},
-    uefi::{BootServices, Handle},
+    uefi::BootServices,
 };
 
 // Definições de GUID e estruturas UEFI cruas (se não existirem no módulo
@@ -21,7 +21,6 @@ pub struct GopDriver<'a> {
 }
 
 impl<'a> GopDriver<'a> {
-    /// Inicializa o driver localizando o protocolo GOP via BootServices.
     pub fn new(boot_services: &'a BootServices) -> Result<Self> {
         // FIX: Tipo explícito para ponteiro nulo
         let gop_interface: *mut c_void = core::ptr::null_mut();
@@ -54,16 +53,13 @@ impl<'a> GopDriver<'a> {
         })
     }
 
-    /// Obtém acesso direto ao Framebuffer atual para desenho.
-    ///
-    /// # Safety
-    /// Retorna uma estrutura que escreve diretamente na RAM de vídeo.
-    pub unsafe fn get_framebuffer(&self) -> Result<Framebuffer> {
+    /// Obtém acesso direto ao Framebuffer atual.
+    /// Requer `&mut self` pois pode alterar o modo de vídeo.
+    pub unsafe fn get_framebuffer(&mut self) -> Result<Framebuffer> {
         let info = self.set_mode(None)?;
 
-        // FIX: Framebuffer::new não retorna Option, retorna Self diretamente (unsafe).
-        // Se retornar Option na sua impl, use ok_or. Se não, use Ok().
-        // Assumindo a versão unsafe direta:
+        // Retorna Framebuffer diretamente (assumindo que Framebuffer::new é infalível
+        // ou unsafe)
         Ok(Framebuffer::new(info.addr, info))
     }
 }
