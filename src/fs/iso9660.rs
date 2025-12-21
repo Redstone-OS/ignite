@@ -1,12 +1,12 @@
-//! ISO9660 Filesystem Driver
+//! Driver de sistema de arquivos ISO9660
 //!
-//! Reads ISO9660 CD/DVD filesystems
+//! Lê sistemas de arquivos ISO9660 CD/DVD
 
 use alloc::vec::Vec;
 
 use crate::error::{BootError, Result};
 
-/// ISO9660 Volume Descriptor
+/// Descritor de volume ISO9660
 #[repr(C, packed)]
 #[derive(Debug, Copy, Clone)]
 struct VolumeDescriptor {
@@ -15,7 +15,7 @@ struct VolumeDescriptor {
     version:    u8,
 }
 
-/// Primary Volume Descriptor
+/// Descritor de volume primário
 #[repr(C, packed)]
 struct PrimaryVolumeDescriptor {
     type_code:              u8,
@@ -25,7 +25,7 @@ struct PrimaryVolumeDescriptor {
     system_id:              [u8; 32],
     volume_id:              [u8; 32],
     unused2:                [u8; 8],
-    volume_space_size:      [u8; 8], // Both-endian
+    volume_space_size:      [u8; 8], // Ambos-endian
     unused3:                [u8; 32],
     volume_set_size:        [u8; 4],
     volume_sequence_number: [u8; 4],
@@ -34,24 +34,24 @@ struct PrimaryVolumeDescriptor {
     // ... more fields
 }
 
-/// Directory Record
+/// Registro de diretório
 #[repr(C, packed)]
 #[derive(Debug, Copy, Clone)]
 struct DirectoryRecord {
     length:                 u8,
     extended_attr_length:   u8,
-    extent_location:        [u8; 8], // Both-endian
-    data_length:            [u8; 8], // Both-endian
+    extent_location:        [u8; 8], // Ambos-endian
+    data_length:            [u8; 8], // Ambos-endian
     recording_date_time:    [u8; 7],
     file_flags:             u8,
     file_unit_size:         u8,
     interleave_gap_size:    u8,
     volume_sequence_number: [u8; 4],
     name_length:            u8,
-    // Followed by name
+    // Seguido pelo nome
 }
 
-/// ISO9660 filesystem
+/// Sistema de arquivos ISO9660
 pub struct Iso9660FileSystem {
     block_size:      u32,
     root_dir_extent: u32,
@@ -59,26 +59,26 @@ pub struct Iso9660FileSystem {
 }
 
 impl Iso9660FileSystem {
-    /// Mount ISO9660 from volume descriptors
+    /// Montar ISO9660 a partir de descritores de volume
     pub fn mount(descriptors: &[u8]) -> Result<Self> {
-        // ISO9660 volume descriptors start at sector 16 (0x8000 bytes)
+        // Descritores de volume ISO9660 começam no setor 16 (0x8000 bytes)
         const SECTOR_SIZE: usize = 2048;
         let mut offset = 16 * SECTOR_SIZE;
 
         while offset + SECTOR_SIZE <= descriptors.len() {
             let vd = unsafe { &*(descriptors[offset..].as_ptr() as *const VolumeDescriptor) };
 
-            // Check identifier "CD001"
+            // Verificar identificador "CD001"
             if &vd.identifier != b"CD001" {
                 return Err(BootError::Generic("Invalid ISO9660 identifier"));
             }
 
             if vd.type_code == 1 {
-                // Primary Volume Descriptor
+                // Descritor de volume primário
                 let pvd =
                     unsafe { &*(descriptors[offset..].as_ptr() as *const PrimaryVolumeDescriptor) };
 
-                // Read block size (little-endian from both-endian field)
+                // Ler tamanho do bloco (little-endian do campo both-endian)
                 let block_size = u32::from_le_bytes([
                     pvd.logical_block_size[0],
                     pvd.logical_block_size[1],
@@ -86,8 +86,8 @@ impl Iso9660FileSystem {
                     pvd.logical_block_size[3],
                 ]);
 
-                // Root directory is at offset 156 in PVD
-                // TODO: Parse root directory record properly
+                // Diretório raiz está no offset 156 no PVD
+                // TODO: Parsear registro de diretório raiz corretamente
 
                 return Ok(Self {
                     block_size,
@@ -95,25 +95,29 @@ impl Iso9660FileSystem {
                     root_dir_size: 0,
                 });
             } else if vd.type_code == 255 {
-                // Volume Descriptor Set Terminator
+                // Terminador do conjunto de descritores de volume
                 break;
             }
 
             offset += SECTOR_SIZE;
         }
 
-        Err(BootError::Generic("Primary Volume Descriptor not found"))
+        Err(BootError::Generic(
+            "Descritor de Volume Primário não encontrado",
+        ))
     }
 
-    /// Read a file by path
+    /// Ler um arquivo pelo caminho
     pub fn read_file(&self, path: &str) -> Result<Vec<u8>> {
-        // TODO: Implement
-        // 1. Start from root directory
-        // 2. Parse path components
-        // 3. Navigate directory tree
-        // 4. Find file
-        // 5. Read extents
+        // TODO: Implementar
+        // 1. Começar do diretório raiz
+        // 2. Parsear componentes do caminho
+        // 3. Navegar árvore de diretório
+        // 4. Encontrar arquivo
+        // 5. Ler extents
 
-        Err(BootError::Generic("ISO9660 read_file not yet implemented"))
+        Err(BootError::Generic(
+            "ISO9660 read_file ainda não implementado",
+        ))
     }
 }

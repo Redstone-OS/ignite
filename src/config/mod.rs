@@ -1,6 +1,6 @@
-//! Configuration System
+//! Sistema de Configuração
 //!
-//! Parses boot configuration files (ignite.conf / boot.cfg)
+//! Analisa arquivos de configuração de boot (ignite.conf / boot.cfg)
 
 pub mod macros;
 pub mod parser;

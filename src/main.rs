@@ -1,6 +1,13 @@
 #![no_std]
 #![cfg_attr(any(target_arch = "riscv64", target_os = "uefi"), no_main)]
 
+//! # Redstone OS Bootloader (Ignite)
+//!
+//! Este arquivo contém o ponto de entrada principal e a lógica de inicialização
+//! para o bootloader `ignite`. Ele é responsável por configurar o ambiente
+//! inicial, carregar o kernel e o sistema de arquivos inicial (initfs),
+//! configurar o layout de memória e passar o controle para o kernel.
+
 mod redstonefs;
 
 extern crate alloc;
@@ -32,7 +39,7 @@ mod serial_16550;
 const KIBI: usize = 1024;
 const MIBI: usize = KIBI * KIBI;
 
-// TODO: allocate this in a more reasonable manner
+// TODO: alocar isso de uma maneira mais razoável
 static mut AREAS: [OsMemoryEntry; 1024] = [OsMemoryEntry {
     base: 0,
     size: 0,
@@ -87,6 +94,7 @@ impl<'a> Write for SliceWriter<'a> {
 #[allow(dead_code)]
 #[derive(Debug)]
 #[repr(C, packed(8))]
+/// Argumentos passados para o kernel durante a inicialização.
 pub struct KernelArgs {
     kernel_base: u64,
     kernel_size: u64,
@@ -95,14 +103,14 @@ pub struct KernelArgs {
     env_base:    u64,
     env_size:    u64,
 
-    /// The base pointer to the saved RSDP.
+    /// O ponteiro base para o RSDP salvo.
     ///
-    /// This field can be NULL, and if so, the system has not booted with UEFI
-    /// or in some other way retrieved the RSDPs. The kernel or a userspace
-    /// driver will thus try searching the BIOS memory instead. On UEFI
-    /// systems, searching is not guaranteed to actually work though.
+    /// Este campo pode ser NULL e, se for, o sistema não inicializou com UEFI
+    /// ou de alguma outra forma não recuperou os RSDPs. O kernel ou um driver
+    /// de espaço de usuário tentará, portanto, pesquisar a memória BIOS. Em
+    /// sistemas UEFI, a pesquisa não é garantida de funcionar.
     acpi_rsdp_base: u64,
-    /// The size of the RSDP region.
+    /// O tamanho da região RSDP.
     acpi_rsdp_size: u64,
 
     areas_base: u64,
@@ -137,10 +145,10 @@ fn select_mode(os: &impl Os, output_i: usize, live: &mut bool) -> Option<OsVideo
         return None;
     }
 
-    // Sort modes by pixel area, reversed
+    // Ordenar modos por área de pixel, revertido
     modes.sort_by(|a, b| (b.0.width * b.0.height).cmp(&(a.0.width * a.0.height)));
 
-    // Set selected based on best resolution
+    // Definir selecionado com base na melhor resolução
     print!("Output {}", output_i);
     let mut selected = modes.first().map_or(0, |x| x.0.id);
     if let Some((best_width, best_height)) = os.best_resolution(output_i) {
@@ -184,7 +192,7 @@ fn select_mode(os: &impl Os, output_i: usize, live: &mut bool) -> Option<OsVideo
             row += 1;
         }
 
-        // Read keypress
+        // Ler pressionamento de tecla
         match os.get_key() {
             OsKey::Left => {
                 if let Some(mut mode_i) = modes.iter().position(|x| x.0.id == selected) {
@@ -292,7 +300,7 @@ fn redstonefs<O: Os>(os: &O) -> (redstonefs::FileSystem<O::D>, Option<&'static [
                 }
             }
 
-            // Erase password information
+            // Apagar informações da senha
             while os.get_text_position().0 > 0 {
                 print!("\x08 \x08");
             }
@@ -306,7 +314,7 @@ fn redstonefs<O: Os>(os: &O) -> (redstonefs::FileSystem<O::D>, Option<&'static [
                 return (
                     fs,
                     password_opt.map(|password| {
-                        // Copy password to page aligned memory
+                        // Copiar senha para memória alinhada por página
                         let password_size = password.len();
                         let password_base = os.alloc_zeroed_page_aligned(password_size);
 
@@ -324,7 +332,7 @@ fn redstonefs<O: Os>(os: &O) -> (redstonefs::FileSystem<O::D>, Option<&'static [
                 );
             },
             Err(err) => match err.errno {
-                // Incorrect password, try again
+                // Senha incorreta, tente novamente
                 syscall::ENOKEY => (),
                 _ => {
                     panic!("Failed to open RedstoneFS: {}", err);
@@ -612,7 +620,7 @@ fn main(os: &impl Os) -> (usize, u64, KernelArgs) {
 
         for output_i in 0..os.video_outputs() {
             if let Some(mut mode) = mode_opts[output_i] {
-                // Set mode to get updated values
+                // Definir modo para obter valores atualizados
                 os.set_video_mode(output_i, &mut mode);
 
                 if output_i == 0 {

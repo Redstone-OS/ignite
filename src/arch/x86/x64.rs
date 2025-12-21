@@ -1,7 +1,9 @@
 use core::slice;
 
-use crate::area_add;
-use crate::os::{Os, OsMemoryEntry, OsMemoryKind};
+use crate::{
+    area_add,
+    os::{Os, OsMemoryEntry, OsMemoryKind},
+};
 
 const ENTRY_ADDRESS_MASK: u64 = 0x000F_FFFF_FFFF_F000;
 const PAGE_ENTRIES: usize = 512;
@@ -31,18 +33,18 @@ const LARGE: u64 = 1 << 7;
 
 pub unsafe fn paging_create(os: &impl Os, kernel_phys: u64, kernel_size: u64) -> Option<usize> {
     unsafe {
-        // Create PML4
+        // Criar PML4
         let pml4 = paging_allocate(os)?;
 
         {
-            // Create PDP for identity mapping
+            // Criar PDP para mapeamento de identidade
             let pdp = paging_allocate(os)?;
 
-            // Link first user and first kernel PML4 entry to PDP
+            // Linkar primeira entrada PML4 de usuário e primeira de kernel para PDP
             pml4[0] = pdp.as_ptr() as u64 | WRITABLE | PRESENT;
             pml4[256] = pdp.as_ptr() as u64 | WRITABLE | PRESENT;
 
-            // Identity map 8 GiB using 2 MiB pages
+            // Mapeamento de identidade de 8 GiB usando páginas de 2 MiB
             for pdp_i in 0..8 {
                 let pd = paging_allocate(os)?;
                 pdp[pdp_i] = pd.as_ptr() as u64 | WRITABLE | PRESENT;
@@ -54,20 +56,20 @@ pub unsafe fn paging_create(os: &impl Os, kernel_phys: u64, kernel_size: u64) ->
         }
 
         {
-            // Create PDP (spanning 512 GiB) for kernel mapping
+            // Criar PDP (abrangendo 512 GiB) para mapeamento do kernel
             let pdp = paging_allocate(os)?;
 
-            // Link last PML4 entry to PDP
+            // Linkar última entrada PML4 para PDP
             pml4[511] = pdp.as_ptr() as u64 | WRITABLE | PRESENT;
 
-            // Create PD (spanning 1 GiB) for kernel mapping.
+            // Criar PD (abrangendo 1 GiB) para mapeamento do kernel.
             let pd = paging_allocate(os)?;
 
-            // The kernel is mapped at -2^31, i.e. 0xFFFF_FFFF_8000_0000. Since a PD is 1 GiB, link
-            // the second last PDP entry to PD.
+            // O kernel é mapeado em -2^31, ou seja, 0xFFFF_FFFF_8000_0000. Como um PD é 1
+            // GiB, linkar a penúltima entrada PDP para PD.
             pdp[510] = pd.as_ptr() as u64 | WRITABLE | PRESENT;
 
-            // Map kernel_size bytes to kernel offset, i.e. to the start of the PD.
+            // Mapear kernel_size bytes no offset do kernel, ou seja, para o início do PD.
 
             let mut kernel_mapped = 0;
 
@@ -99,7 +101,7 @@ pub unsafe fn paging_framebuffer(
     framebuffer_size: u64,
 ) -> Option<u64> {
     unsafe {
-        //TODO: smarter test for framebuffer already mapped
+        // TODO: teste mais inteligente para framebuffer já mapeado
         if framebuffer_phys + framebuffer_size <= 0x2_0000_0000 {
             return Some(framebuffer_phys + PHYS_OFFSET);
         }
@@ -111,7 +113,7 @@ pub unsafe fn paging_framebuffer(
 
         let pml4 = slice::from_raw_parts_mut(page_phys as *mut u64, PAGE_ENTRIES);
 
-        // Create PDP for framebuffer mapping
+        // Criar PDP para mapeamento de framebuffer
         let pdp = if pml4[pml4_i] == 0 {
             let pdp = paging_allocate(os)?;
             pml4[pml4_i] = pdp.as_ptr() as u64 | 1 << 1 | 1;
@@ -123,7 +125,7 @@ pub unsafe fn paging_framebuffer(
             )
         };
 
-        // Map framebuffer_size at framebuffer offset
+        // Mapear framebuffer_size no offset do framebuffer
         let mut framebuffer_mapped = 0;
         while framebuffer_mapped < framebuffer_size && pdp_i < pdp.len() {
             let pd = paging_allocate(os)?;

@@ -1,7 +1,7 @@
-//! Limine Boot Protocol Implementation
+//! Implementação do Protocolo de Boot Limine
 //!
-//! This is the native protocol for Redstone OS, compatible with the Limine
-//! specification. https://codeberg.org/Limine/limine-protocol
+//! Este é o protocolo nativo para o Redstone OS, compatível com a especificação
+//! Limine. https://codeberg.org/Limine/limine-protocol
 
 use log::info;
 
@@ -12,7 +12,7 @@ use crate::{
     types::LoadedFile,
 };
 
-/// Limine protocol implementation (native Redstone OS protocol)
+/// Implementação do protocolo Limine (protocolo nativo do Redstone OS)
 pub struct LimineProtocol<'a> {
     allocator:   &'a MemoryAllocator<'a>,
     entry_point: u64,
@@ -33,12 +33,12 @@ impl<'a> LimineProtocol<'a> {
 
 impl<'a> BootProtocol for LimineProtocol<'a> {
     fn validate(&self, kernel: &[u8]) -> Result<()> {
-        // Validate ELF header
+        // Validar cabeçalho ELF
         if kernel.len() < 64 {
             return Err(BootError::Generic("Kernel file too small"));
         }
 
-        // Check ELF magic
+        // Checar magic ELF
         if &kernel[0..4] != b"\x7fELF" {
             return Err(BootError::Generic("Invalid ELF magic"));
         }
@@ -53,8 +53,8 @@ impl<'a> BootProtocol for LimineProtocol<'a> {
         _cmdline: Option<&str>,
         _modules: &[LoadedFile],
     ) -> Result<BootInfo> {
-        // For now, use the existing ELF loader
-        // In a complete implementation, this would parse Limine requests/responses
+        // Por enquanto, usar o carregador ELF existente
+        // Em uma implementação completa, isso analisaria requisições/respostas Limine
         use crate::elf::ElfLoader;
 
         let elf_loader = ElfLoader::new(self.allocator);
@@ -66,20 +66,20 @@ impl<'a> BootProtocol for LimineProtocol<'a> {
 
         info!("Limine protocol: Kernel loaded at {:#x}", self.kernel_base);
 
-        // TODO: Create Limine boot information structure
-        // This should include:
-        // - Memory map
-        // - Framebuffer info
-        // - Modules
-        // - RSDP pointer
+        // TODO: Criar estrutura de informações de boot Limine
+        // Isso deve incluir:
+        // - Mapa de memória
+        // - Info de Framebuffer
+        // - Módulos
+        // - Ponteiro RSDP
         // - etc.
 
         Ok(BootInfo {
             entry_point:   self.entry_point,
             kernel_base:   self.kernel_base,
             kernel_size:   self.kernel_size,
-            stack_ptr:     None, // Kernel manages its own stack
-            boot_info_ptr: 0,    // TODO: Allocate and fill Limine boot info
+            stack_ptr:     None, // Kernel gerencia sua própria pilha
+            boot_info_ptr: 0,    // TODO: Alocar e preencher info de boot Limine
             registers:     ProtocolRegisters::default(),
         })
     }

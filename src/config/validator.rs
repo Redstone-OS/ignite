@@ -1,6 +1,6 @@
-//! Configuration Validator
+//! Validador de Configuração
 //!
-//! Validates configuration syntax and values
+//! Valida sintaxe e valores de configuração
 
 use alloc::{
     format,
@@ -11,22 +11,22 @@ use alloc::{
 use super::types::BootConfig;
 use crate::error::{BootError, Result};
 
-/// Validation error
+/// Erro de validação
 #[derive(Debug)]
 pub struct ValidationError {
     pub line:    usize,
     pub message: String,
 }
 
-/// Configuration validator
+/// Validador de configuração
 pub struct ConfigValidator;
 
 impl ConfigValidator {
-    /// Validate parsed configuration
+    /// Validar configuração parseada
     pub fn validate(config: &BootConfig) -> Result<Vec<ValidationError>> {
         let mut errors = Vec::new();
 
-        // Check if there are any entries
+        // Verificar se existem entradas
         if config.entries.is_empty() {
             errors.push(ValidationError {
                 line:    0,
@@ -34,7 +34,7 @@ impl ConfigValidator {
             });
         }
 
-        // Validate default entry
+        // Validar entrada padrão
         if config.default_entry == 0 || config.default_entry > config.entries.len() {
             errors.push(ValidationError {
                 line:    0,
@@ -46,9 +46,9 @@ impl ConfigValidator {
             });
         }
 
-        // Validate each entry
+        // Validar cada entrada
         for (i, entry) in config.entries.iter().enumerate() {
-            // Check required fields
+            // Verificar campos obrigatórios
             if entry.protocol.is_empty() {
                 errors.push(ValidationError {
                     line:    i + 1,
@@ -63,7 +63,7 @@ impl ConfigValidator {
                 });
             }
 
-            // Validate protocol name
+            // Validar nome do protocolo
             let valid_protocols = [
                 "limine",
                 "linux",

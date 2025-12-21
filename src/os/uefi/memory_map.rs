@@ -6,7 +6,7 @@ use uefi::table::boot::{MemoryDescriptor, MemoryType};
 use crate::os::{OsMemoryEntry, OsMemoryKind};
 
 pub struct MemoryMapIter {
-    // Stub fields
+    // Campos stub
 }
 
 impl MemoryMapIter {
@@ -18,7 +18,7 @@ impl MemoryMapIter {
     pub fn exit_boot_services(self) {
         // Stub
         // panic!("exit_boot_services stub");
-        // Panic usage in bootloader might double panic.
+        // Uso de panic no bootloader pode duplicar o pânico.
         loop {}
     }
 }

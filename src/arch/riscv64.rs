@@ -2,7 +2,7 @@ use core::slice;
 
 use crate::os::{Os, OsMemoryEntry, OsMemoryKind};
 
-// Sv48 scheme
+// Esquema Sv48
 
 const PAGE_SHIFT: usize = 12;
 const TABLE_SHIFT: usize = 9;
@@ -48,18 +48,18 @@ unsafe fn get_table(os: &impl Os, parent: &mut [u64], index: usize) -> Option<&'
 
 pub unsafe fn paging_create(os: &impl Os, kernel_phys: u64, kernel_size: u64) -> Option<usize> {
     unsafe {
-        // Create L0
+        // Criar L0
         let l0 = paging_allocate(os)?;
 
         {
-            // Create L1 for identity mapping
+            // Criar L1 para mapeamento de identidade
             let l1 = paging_allocate(os)?;
 
-            // Map L1 into beginning of userspace and kernelspace
+            // Mapear L1 no início do espaço de usuário e kernel
             l0[0] = (l1.as_ptr() as u64 >> 2) | VALID;
             l0[PAGE_ENTRIES / 2] = (l1.as_ptr() as u64 >> 2) | VALID;
 
-            // Identity map 8 GiB using 1GB pages
+            // Mapeamento de identidade de 8 GiB usando páginas de 1GB
             for l1_i in 0..8 {
                 let addr = l1_i as u64 * 0x4000_0000;
                 l1[l1_i] = addr >> 2 | RWX | VALID;
@@ -67,13 +67,13 @@ pub unsafe fn paging_create(os: &impl Os, kernel_phys: u64, kernel_size: u64) ->
         }
 
         {
-            // Create L1 for kernel mapping
+            // Criar L1 para mapeamento do kernel
             let l1 = paging_allocate(os)?;
 
-            // Link second to last L0 entry to L1
+            // Linkar penúltima entrada L0 para L1
             l0[510] = l1.as_ptr() as u64 >> 2 | VALID;
 
-            // Map kernel_size at kernel offset
+            // Mapear kernel_size no offset do kernel
             let mut kernel_mapped = 0;
             let mut l1_i = 0;
             while kernel_mapped < kernel_size && l1_i < l1.len() {
@@ -116,7 +116,7 @@ pub unsafe fn paging_physmem(os: &impl Os, page_phys: usize, phys: u64, size: u6
 
         let l0 = slice::from_raw_parts_mut(page_phys as *mut u64, PAGE_ENTRIES);
 
-        // Map framebuffer_size at framebuffer offset
+        // Mapear framebuffer_size no offset do framebuffer
         let mut mapped = 0;
         while mapped < size && l0_i < l0.len() {
             let l1 = get_table(os, l0, l0_i)?;
@@ -146,5 +146,6 @@ pub unsafe fn paging_physmem(os: &impl Os, page_phys: usize, phys: u64, size: u6
     }
 }
 
-use crate::area_add;
 pub use paging_physmem as paging_framebuffer;
+
+use crate::area_add;

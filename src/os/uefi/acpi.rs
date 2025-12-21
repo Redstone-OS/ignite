@@ -1,7 +1,7 @@
 use core::slice;
 
 use uefi::Guid;
-pub const ACPI_20_TABLE_GUID: Guid = uefi::table::cfg::ACPI2_GUID; // Check if correct, 0.28 likely has it in table::cfg
+pub const ACPI_20_TABLE_GUID: Guid = uefi::table::cfg::ACPI2_GUID; // Checar se correto, 0.28 provavelmente tem isso em table::cfg
 pub const ACPI_TABLE_GUID: Guid = uefi::table::cfg::ACPI_GUID;
 
 use crate::Os;
@@ -17,14 +17,15 @@ fn validate_rsdp(address: usize, _v2: bool) -> core::result::Result<usize, Inval
         oem_id:          [u8; 6],
         revision:        u8,
         rsdt_addr:       u32,
-        // the following fields are only available for ACPI 2.0, and are reserved otherwise
+        // os campos a seguir estão disponíveis apenas para ACPI 2.0, e são reservados caso
+        // contrário
         length:          u32,
         xsdt_addr:       u64,
         extended_chksum: u8,
         _rsvd:           [u8; 3],
     }
-    // paging is not enabled at this stage; we can just read the physical address
-    // here.
+    // paginação não está habilitada neste estágio; podemos apenas ler o endereço
+    // físico aqui.
     let rsdp_bytes =
         unsafe { core::slice::from_raw_parts(address as *const u8, core::mem::size_of::<Rsdp>()) };
     let rsdp = unsafe {
@@ -101,7 +102,7 @@ pub(crate) fn find_acpi_table_pointers(os: &impl Os) -> Option<(u64, u64)> {
 
     if !rsdp_area.is_empty() {
         unsafe {
-            // Copy to page aligned area
+            // Copiar para área alinhada à página
             let size = rsdp_area.len();
             let base = os.alloc_zeroed_page_aligned(size);
             slice::from_raw_parts_mut(base, size).copy_from_slice(rsdp_area);

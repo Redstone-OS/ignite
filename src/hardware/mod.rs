@@ -1,6 +1,6 @@
-//! Hardware Abstraction
+//! Abstração de Hardware
 //!
-//! ACPI, FDT, and other hardware interfaces
+//! ACPI, FDT, e outras interfaces de hardware
 
 pub mod acpi;
 pub mod fdt;

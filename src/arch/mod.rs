@@ -1,3 +1,8 @@
+//! Módulos específicos de arquitetura
+//!
+//! Este módulo exporta definições de paginação e memória para diferentes
+//! arquiteturas (x86_64, AArch64, RISC-V 64).
+
 #[cfg(target_arch = "aarch64")]
 pub use self::aarch64::*;
 

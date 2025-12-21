@@ -1,9 +1,9 @@
 #![allow(unaligned_references)]
 
-//! Linux Boot Protocol Implementation
+//! Implementação do Protocolo de Boot Linux
 //!
-//! Implements the Linux x86/x86_64 boot protocol for loading Linux kernels.
-//! Reference: https://www.kernel.org/doc/html/latest/x86/boot.html
+//! Implementa o protocolo de boot Linux x86/x86_64 para carregar kernels Linux.
+//! Referência: https://www.kernel.org/doc/html/latest/x86/boot.html
 
 use core::mem::size_of;
 
@@ -16,12 +16,12 @@ use crate::{
     types::LoadedFile,
 };
 
-// Linux boot protocol constants
+// Constantes do protocolo de boot Linux
 const LINUX_MAGIC: u32 = 0x53726448; // "HdrS"
 const BOOT_FLAG_MAGIC: u16 = 0xAA55;
 const SETUP_HEADER_OFFSET: usize = 0x1F1;
 
-/// Linux kernel setup header (partial)
+/// Cabeçalho de setup do kernel Linux (parcial)
 #[repr(C, packed)]
 #[derive(Debug, Copy, Clone)]
 struct SetupHeader {
@@ -33,8 +33,8 @@ struct SetupHeader {
     root_dev:              u16,
     boot_flag:             u16,
     jump:                  u16,
-    header:                u32, // "HdrS" magic
-    version:               u16, // Boot protocol version
+    header:                u32, // Magic "HdrS"
+    version:               u16, // Versão do protocolo de boot
     realmode_swtch:        u32,
     start_sys_seg:         u16,
     kernel_version:        u16,
@@ -65,7 +65,7 @@ struct SetupHeader {
     handover_offset:       u32,
 }
 
-/// Linux boot protocol implementation
+/// Implementação do protocolo de boot Linux
 pub struct LinuxProtocol<'a> {
     allocator:    &'a MemoryAllocator<'a>,
     setup_header: Option<SetupHeader>,
@@ -85,7 +85,7 @@ impl<'a> LinuxProtocol<'a> {
         }
     }
 
-    /// Parse Linux setup header from kernel image
+    /// Analisar cabeçalho de setup Linux da imagem do kernel
     fn parse_setup_header(&self, kernel: &[u8]) -> Result<SetupHeader> {
         if kernel.len() < SETUP_HEADER_OFFSET + size_of::<SetupHeader>() {
             return Err(BootError::Generic(
@@ -93,13 +93,13 @@ impl<'a> LinuxProtocol<'a> {
             ));
         }
 
-        // Read setup header
+        // Ler cabeçalho de setup
         let header_bytes =
             &kernel[SETUP_HEADER_OFFSET..SETUP_HEADER_OFFSET + size_of::<SetupHeader>()];
         let header: SetupHeader =
             unsafe { core::ptr::read_unaligned(header_bytes.as_ptr() as *const SetupHeader) };
 
-        // Validate magic numbers
+        // Validar números mágicos
         if header.boot_flag != BOOT_FLAG_MAGIC {
             return Err(BootError::Generic("Invalid Linux boot flag"));
         }
@@ -124,21 +124,21 @@ impl<'a> LinuxProtocol<'a> {
         Ok(header)
     }
 
-    /// Load kernel into memory at appropriate address
+    /// Carregar kernel na memória em endereço apropriado
     fn load_kernel(&mut self, kernel: &[u8], header: &SetupHeader) -> Result<u64> {
-        // Calculate kernel load address
+        // Calcular endereço de carregamento do kernel
         let kernel_addr = if header.relocatable_kernel != 0 {
-            // Relocatable kernel - can load at preferred address or elsewhere
+            // Kernel relocável - pode carregar no endereço preferido ou em outro lugar
             header.pref_address
         } else {
-            // Non-relocatable - must load at specific address
-            0x100000 // Default 1MB for non-relocatable kernels
+            // Não-relocável - deve carregar em endereço específico
+            0x100000 // Padrão 1MB para kernels não-relocáveis
         };
 
-        // Setup sectors: first part of bzImage
+        // Setores de setup: primeira parte do bzImage
         let setup_size = ((header.setup_sects as usize) + 1) * 512;
 
-        // Protected mode kernel starts after setup
+        // Kernel em modo protegido começa após setup
         let kernel_start = setup_size;
         let kernel_size = kernel.len() - kernel_start;
 
@@ -148,13 +148,13 @@ impl<'a> LinuxProtocol<'a> {
         );
         info!("Loading Linux kernel at {:#x}", kernel_addr);
 
-        // Allocate memory for kernel
+        // Alocar memória para kernel
         let pages_needed = (kernel_size + 4095) / 4096;
         let kernel_mem = self
             .allocator
             .allocate_at_address(kernel_addr, pages_needed)?;
 
-        // Copy kernel to memory
+        // Copiar kernel para memória
         unsafe {
             core::ptr::copy_nonoverlapping(
                 kernel[kernel_start..].as_ptr(),
@@ -167,13 +167,13 @@ impl<'a> LinuxProtocol<'a> {
         Ok(kernel_addr)
     }
 
-    /// Load initrd/initramfs if provided
+    /// Carregar initrd/initramfs se fornecido
     fn load_initrd(&mut self, modules: &[LoadedFile]) -> Result<()> {
         if modules.is_empty() {
             return Ok(());
         }
 
-        // First module is initrd
+        // Primeiro módulo é initrd
         let initrd = &modules[0];
 
         info!(
@@ -185,24 +185,24 @@ impl<'a> LinuxProtocol<'a> {
         Ok(())
     }
 
-    /// Setup command line
+    /// Configurar linha de comando
     fn setup_cmdline(&mut self, cmdline: Option<&str>) -> Result<()> {
         if let Some(cmd) = cmdline {
             let cmdline_bytes = cmd.as_bytes();
             let size = cmdline_bytes.len() + 1; // +1 for null terminator
 
-            // Allocate memory for command line
+            // Alocar memória para linha de comando
             let pages = (size + 4095) / 4096;
             let cmdline_ptr = self.allocator.allocate_any(pages)?;
 
-            // Copy command line
+            // Copiar linha de comando
             unsafe {
                 core::ptr::copy_nonoverlapping(
                     cmdline_bytes.as_ptr(),
                     cmdline_ptr as *mut u8,
                     cmdline_bytes.len(),
                 );
-                // Null terminate
+                // Terminar com nulo
                 *((cmdline_ptr + cmdline_bytes.len() as u64) as *mut u8) = 0;
             }
 
@@ -226,32 +226,32 @@ impl<'a> BootProtocol for LinuxProtocol<'a> {
         cmdline: Option<&str>,
         modules: &[LoadedFile],
     ) -> Result<BootInfo> {
-        // Parse setup header
+        // Analisar cabeçalho de setup
         let header = self.parse_setup_header(kernel)?;
         self.setup_header = Some(header);
 
-        // Load kernel
+        // Carregar kernel
         let kernel_addr = self.load_kernel(kernel, &header)?;
 
-        // Load initrd if provided
+        // Carregar initrd se fornecido
         self.load_initrd(modules)?;
 
-        // Setup command line
+        // Configurar linha de comando
         self.setup_cmdline(cmdline)?;
 
-        // Create boot parameters structure
-        // TODO: Allocate and fill Linux boot_params structure
-        // This includes:
-        // - Setup header
-        // - Command line pointer
-        // - Initrd address and size
-        // - E820 memory map
-        // - Framebuffer info
+        // Criar estrutura de parâmetros de boot
+        // TODO: Alocar e preencher estrutura boot_params do Linux
+        // Isso inclui:
+        // - Cabeçalho de setup
+        // - Ponteiro da linha de comando
+        // - Endereço e tamanho do initrd
+        // - Mapa de memória E820
+        // - Info de Framebuffer
         // - etc.
 
-        let boot_params_ptr = 0; // TODO: Allocate boot_params
+        let boot_params_ptr = 0; // TODO: Alocar boot_params
 
-        // Entry point is code32_start or pref_address
+        // Ponto de entrada é code32_start ou pref_address
         let entry_point = if header.code32_start != 0 {
             header.code32_start as u64
         } else {
@@ -267,7 +267,7 @@ impl<'a> BootProtocol for LinuxProtocol<'a> {
             stack_ptr: None,
             boot_info_ptr: boot_params_ptr,
             registers: ProtocolRegisters {
-                rsi: Some(boot_params_ptr), // RSI = boot_params pointer
+                rsi: Some(boot_params_ptr), // RSI = ponteiro boot_params
                 ..Default::default()
             },
         })

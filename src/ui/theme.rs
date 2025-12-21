@@ -1,6 +1,6 @@
-//! Theme System
+//! Sistema de Temas
 
-/// Color in RGB format
+/// Cor no formato RGB
 #[derive(Debug, Clone, Copy)]
 pub struct Color {
     pub r: u8,
@@ -35,7 +35,7 @@ impl Color {
     };
 }
 
-/// UI Theme
+/// Tema de UI
 pub struct Theme {
     pub background: Color,
     pub foreground: Color,

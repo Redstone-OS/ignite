@@ -1,7 +1,7 @@
-//! Multiboot 2 Boot Protocol Implementation
+//! Implementação do Protocolo de Boot Multiboot 2
 //!
-//! Implements the Multiboot 2 specification.
-//! Reference: https://www.gnu.org/software/grub/manual/multiboot2/multiboot.html
+//! Implementa a especificação Multiboot 2.
+//! Referência: https://www.gnu.org/software/grub/manual/multiboot2/multiboot.html
 
 use log::info;
 
@@ -12,13 +12,13 @@ use crate::{
     types::LoadedFile,
 };
 
-// Multiboot 2 constants
+// Constantes Multiboot 2
 const MB2_MAGIC: u32 = 0xE85250D6;
 const MB2_BOOTLOADER_MAGIC: u32 = 0x36D76289;
 const MB2_ARCHITECTURE_I386: u32 = 0;
 const MB2_HEADER_TAG_END: u16 = 0;
 
-/// Multiboot 2 header
+/// Cabeçalho Multiboot 2
 #[repr(C, packed)]
 #[derive(Debug, Copy, Clone)]
 struct Multiboot2Header {
@@ -28,7 +28,7 @@ struct Multiboot2Header {
     checksum:      u32,
 }
 
-/// Multiboot 2 protocol implementation
+/// Implementação do protocolo Multiboot 2
 pub struct Multiboot2Protocol<'a> {
     allocator:   &'a MemoryAllocator<'a>,
     entry_point: u64,
@@ -44,9 +44,9 @@ impl<'a> Multiboot2Protocol<'a> {
         }
     }
 
-    /// Find Multiboot 2 header
+    /// Encontrar cabeçalho Multiboot 2
     fn find_header(&self, kernel: &[u8]) -> Result<(Multiboot2Header, usize)> {
-        let search_len = 32768.min(kernel.len()); // Search first 32KB
+        let search_len = 32768.min(kernel.len()); // Procurar primeiros 32KB
 
         for offset in (0..search_len - 16).step_by(8) {
             if offset + 16 > kernel.len() {
@@ -80,7 +80,7 @@ impl<'a> Multiboot2Protocol<'a> {
                     kernel[offset + 15],
                 ]);
 
-                // Validate checksum
+                // Validar checksum
                 let sum = magic
                     .wrapping_add(architecture)
                     .wrapping_add(header_length)
@@ -121,7 +121,7 @@ impl<'a> BootProtocol for Multiboot2Protocol<'a> {
     ) -> Result<BootInfo> {
         let (_header, _offset) = self.find_header(kernel)?;
 
-        // Load as ELF (Multiboot 2 usually uses ELF)
+        // Carregar como ELF (Multiboot 2 geralmente usa ELF)
         use crate::elf::ElfLoader;
         let elf_loader = ElfLoader::new(self.allocator);
         let loaded = elf_loader.load(kernel)?;
@@ -129,16 +129,16 @@ impl<'a> BootProtocol for Multiboot2Protocol<'a> {
         self.entry_point = loaded.entry_point;
         self.load_addr = loaded.base_address;
 
-        // TODO: Create Multiboot 2 information structure with tags:
-        // - Boot command line tag
-        // - Boot loader name tag
-        // - Module tags
-        // - Memory map tag
-        // - Framebuffer info tag
-        // - ELF symbols tag
+        // TODO: Criar estrutura de informação Multiboot 2 com tags:
+        // - Tag de linha de comando de boot
+        // - Tag de nome do boot loader
+        // - Tags de módulo
+        // - Tag de mapa de memória
+        // - Tag de info de framebuffer
+        // - Tag de símbolos ELF
         // - etc.
 
-        let mbi_ptr = 0; // TODO: Allocate and create MBI
+        let mbi_ptr = 0; // TODO: Alocar e criar MBI
 
         Ok(BootInfo {
             entry_point:   self.entry_point,
@@ -148,7 +148,7 @@ impl<'a> BootProtocol for Multiboot2Protocol<'a> {
             boot_info_ptr: mbi_ptr,
             registers:     ProtocolRegisters {
                 rax: Some(MB2_BOOTLOADER_MAGIC as u64), // EAX = magic
-                rbx: Some(mbi_ptr),                     // EBX = MBI pointer
+                rbx: Some(mbi_ptr),                     // EBX = ponteiro MBI
                 ..Default::default()
             },
         })

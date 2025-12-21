@@ -1,6 +1,6 @@
-//! Configuration Parser
+//! Parser de Configuração
 //!
-//! Parses boot configuration files in Limine-compatible format
+//! Analisa arquivos de configuração de boot em formato compatível com Limine
 
 use alloc::{
     string::{String, ToString},
@@ -15,7 +15,7 @@ use super::{
 };
 use crate::error::{BootError, Result};
 
-/// Configuration file parser
+/// Parser de arquivo de configuração
 pub struct ConfigParser {
     lines:        Vec<String>,
     macros:       MacroExpander,
@@ -23,7 +23,7 @@ pub struct ConfigParser {
 }
 
 impl ConfigParser {
-    /// Parse configuration from string content
+    /// Parsear configuração de conteúdo string
     pub fn parse(content: &str) -> Result<BootConfig> {
         let mut parser = Self {
             lines:        content.lines().map(|s| s.trim().to_string()).collect(),
@@ -40,27 +40,27 @@ impl ConfigParser {
         while self.current_line < self.lines.len() {
             let line = &self.lines[self.current_line].clone();
 
-            // Skip empty lines and comments
+            // Pular linhas vazias e comentários
             if line.is_empty() || line.starts_with('#') {
                 self.current_line += 1;
                 continue;
             }
 
-            // Check for menu entry (starts with /)
+            // Verificar entrada de menu (começa com /)
             if line.starts_with('/') {
                 let entry = self.parse_entry()?;
                 config.entries.push(entry);
                 continue;
             }
 
-            // Check for macro definition (contains =)
+            // Verificar definição de macro (contém =)
             if line.contains('=') && line.starts_with("${") {
                 self.parse_macro_definition(line)?;
                 self.current_line += 1;
                 continue;
             }
 
-            // Parse global option (key: value)
+            // Parsear opção global (chave: valor)
             if let Some(colon_pos) = line.find(':') {
                 let key = line[..colon_pos].trim().to_lowercase();
                 let value = self.macros.expand(line[colon_pos + 1..].trim());
@@ -120,10 +120,10 @@ impl ConfigParser {
     fn parse_entry(&mut self) -> Result<MenuEntry> {
         let line = &self.lines[self.current_line].clone();
 
-        // Count leading slashes to determine hierarchy level
+        // Contar barras para determinar nível hierárquico
         let level = line.chars().take_while(|&c| c == '/').count();
 
-        // Check for expanded flag (+)
+        // Verificar flag expandido (+)
         let expanded = line.chars().nth(level) == Some('+');
         let name_start = if expanded { level + 1 } else { level };
 
@@ -131,36 +131,36 @@ impl ConfigParser {
 
         self.current_line += 1;
 
-        // Parse entry options
+        // Parsear opções de entrada
         let mut entry = MenuEntry::new(name, String::new(), String::new());
         entry.expanded = expanded;
 
-        // Read options until next entry or end
+        // Ler opções até próxima entrada ou fim
         while self.current_line < self.lines.len() {
             let line = &self.lines[self.current_line].clone();
 
-            // Empty or comment
+            // Vazio ou comentário
             if line.is_empty() || line.starts_with('#') {
                 self.current_line += 1;
                 continue;
             }
 
-            // Next entry (starts with /)
+            // Próxima entrada (começa com /)
             if line.starts_with('/') {
-                // Check if it's a sub-entry
+                // Verificar se é sub-entrada
                 let sub_level = line.chars().take_while(|&c| c == '/').count();
                 if sub_level > level {
-                    // Parse sub-entry
+                    // Parsear sub-entrada
                     let sub_entry = self.parse_entry()?;
                     entry.sub_entries.push(sub_entry);
                     continue;
                 } else {
-                    // Same level or higher - end of this entry
+                    // Mesmo nível ou superior - fim desta entrada
                     break;
                 }
             }
 
-            // Parse option
+            // Parsear opção
             if let Some(colon_pos) = line.find(':') {
                 let key = line[..colon_pos].trim().to_lowercase();
                 let value = self.macros.expand(line[colon_pos + 1..].trim());
@@ -177,7 +177,7 @@ impl ConfigParser {
                         });
                     },
                     "module_string" | "module_cmdline" => {
-                        // Apply to last module
+                        // Aplicar ao último módulo
                         if let Some(last_mod) = entry.modules.last_mut() {
                             last_mod.cmdline = Some(value);
                         }
@@ -197,7 +197,7 @@ impl ConfigParser {
 
                 self.current_line += 1;
             } else {
-                // Invalid line
+                // Linha inválida
                 self.current_line += 1;
             }
         }

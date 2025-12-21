@@ -1,9 +1,9 @@
 #![allow(unaligned_references)]
 
-//! Multiboot 1 Boot Protocol Implementation
+//! Implementação do Protocolo de Boot Multiboot 1
 //!
-//! Implements the Multiboot 1 specification for loading kernels.
-//! Reference: https://www.gnu.org/software/grub/manual/multiboot/multiboot.html
+//! Implementa a especificação Multiboot 1 para carregamento de kernels.
+//! Referência: https://www.gnu.org/software/grub/manual/multiboot/multiboot.html
 
 use core::mem::size_of;
 
@@ -16,38 +16,38 @@ use crate::{
     types::LoadedFile,
 };
 
-// Multiboot 1 constants
+// Constantes Multiboot 1
 const MB1_MAGIC: u32 = 0x1BADB002;
 const MB1_BOOTLOADER_MAGIC: u32 = 0x2BADB002;
-const MB1_HEADER_SEARCH: usize = 8192; // Search first 8KB
+const MB1_HEADER_SEARCH: usize = 8192; // Procurar primeiros 8KB
 
-// Multiboot 1 flags
+// Flags Multiboot 1
 const MB1_PAGE_ALIGN: u32 = 1 << 0;
 const MB1_MEMORY_INFO: u32 = 1 << 1;
 const MB1_VIDEO_MODE: u32 = 1 << 2;
 const MB1_AOUT_KLUDGE: u32 = 1 << 16;
 
-/// Multiboot 1 header
+/// Cabeçalho Multiboot 1
 #[repr(C, packed)]
 #[derive(Debug, Copy, Clone)]
 struct Multiboot1Header {
     magic:         u32,
     flags:         u32,
     checksum:      u32,
-    // Only present if MB1_AOUT_KLUDGE is set
+    // Presente apenas se MB1_AOUT_KLUDGE estiver definido
     header_addr:   u32,
     load_addr:     u32,
     load_end_addr: u32,
     bss_end_addr:  u32,
     entry_addr:    u32,
-    // Only present if MB1_VIDEO_MODE is set
+    // Presente apenas se MB1_VIDEO_MODE estiver definido
     mode_type:     u32,
     width:         u32,
     height:        u32,
     depth:         u32,
 }
 
-/// Multiboot 1 info structure passed to kernel
+/// Estrutura de informação Multiboot 1 passada para o kernel
 #[repr(C, packed)]
 #[derive(Debug, Copy, Clone)]
 struct Multiboot1Info {
@@ -81,7 +81,7 @@ struct Multiboot1Info {
     color_info:         [u8; 6],
 }
 
-/// Multiboot 1 module structure
+/// Estrutura de módulo Multiboot 1
 #[repr(C, packed)]
 #[derive(Debug, Copy, Clone)]
 struct Multiboot1Module {
@@ -91,7 +91,7 @@ struct Multiboot1Module {
     reserved:  u32,
 }
 
-/// Multiboot 1 protocol implementation
+/// Implementação do protocolo Multiboot 1
 pub struct Multiboot1Protocol<'a> {
     allocator:   &'a MemoryAllocator<'a>,
     header:      Option<Multiboot1Header>,
@@ -109,11 +109,11 @@ impl<'a> Multiboot1Protocol<'a> {
         }
     }
 
-    /// Find and parse Multiboot 1 header
+    /// Encontrar e analisar cabeçalho Multiboot 1
     fn find_header(&self, kernel: &[u8]) -> Result<(Multiboot1Header, usize)> {
         let search_len = MB1_HEADER_SEARCH.min(kernel.len());
 
-        // Search for magic in first 8KB, aligned on 4-byte boundary
+        // Procurar por magic nos primeiros 8KB, alinhado em fronteira de 4 bytes
         for offset in (0..search_len - size_of::<Multiboot1Header>()).step_by(4) {
             let magic = u32::from_le_bytes([
                 kernel[offset],
@@ -123,19 +123,19 @@ impl<'a> Multiboot1Protocol<'a> {
             ]);
 
             if magic == MB1_MAGIC {
-                // Found magic, read full header
+                // Magic encontrado, ler cabeçalho completo
                 let header_bytes = &kernel[offset..offset + size_of::<Multiboot1Header>()];
                 let header: Multiboot1Header = unsafe {
                     core::ptr::read_unaligned(header_bytes.as_ptr() as *const Multiboot1Header)
                 };
 
-                // Validate checksum
+                // Validar checksum
                 let checksum = header
                     .magic
                     .wrapping_add(header.flags)
                     .wrapping_add(header.checksum);
                 if checksum != 0 {
-                    continue; // Invalid checksum, keep searching
+                    continue; // Checksum inválido, continuar procurando
                 }
 
                 info!("Multiboot 1 header found at offset {:#x}", offset);
@@ -148,11 +148,11 @@ impl<'a> Multiboot1Protocol<'a> {
         Err(BootError::Generic("Multiboot 1 header not found"))
     }
 
-    /// Load kernel using a.out kludge or ELF
+    /// Carregar kernel usando a.out kludge ou ELF
     fn load_kernel(&mut self, kernel: &[u8], header: &Multiboot1Header) -> Result<u64> {
         if (header.flags & MB1_AOUT_KLUDGE) != 0 {
-            // a.out kludge - load at specific addresses
-            info!("Multiboot 1: Using a.out kludge");
+            // a.out kludge - carregar em endereços específicos
+            info!("Multiboot 1: Usando a.out kludge");
 
             let load_addr = header.load_addr as u64;
             let load_end = header.load_end_addr as u64;
@@ -166,15 +166,15 @@ impl<'a> Multiboot1Protocol<'a> {
             info!("  bss_end: {:#x}", bss_end);
             info!("  entry: {:#x}", entry);
 
-            // Allocate memory
+            // Alocar memória
             let pages = ((bss_end - load_addr) as usize + 4095) / 4096;
             let mem = self.allocator.allocate_at_address(load_addr, pages)?;
 
-            // Copy loadable section
+            // Copiar seção carregável
             unsafe {
                 core::ptr::copy_nonoverlapping(kernel.as_ptr(), mem as *mut u8, load_size);
 
-                // Zero BSS
+                // Zerar BSS
                 let bss_start = load_end;
                 let bss_size = (bss_end - bss_start) as usize;
                 core::ptr::write_bytes((mem + (bss_start - load_addr)) as *mut u8, 0, bss_size);
@@ -185,8 +185,8 @@ impl<'a> Multiboot1Protocol<'a> {
 
             Ok(load_addr)
         } else {
-            // ELF format - use ELF loader
-            info!("Multiboot 1: Using ELF format");
+            // Formato ELF - usar carregador ELF
+            info!("Multiboot 1: Usando formato ELF");
 
             use crate::elf::ElfLoader;
             let elf_loader = ElfLoader::new(self.allocator);
@@ -199,13 +199,13 @@ impl<'a> Multiboot1Protocol<'a> {
         }
     }
 
-    /// Create Multiboot 1 info structure
+    /// Criar estrutura de informação Multiboot 1
     fn create_mbi(&self, cmdline: Option<&str>, modules: &[LoadedFile]) -> Result<u64> {
-        // Allocate memory for MBI
+        // Alocar memória para MBI
         let mbi_ptr = self.allocator.allocate_any(1)?;
         let mbi = unsafe { &mut *(mbi_ptr as *mut Multiboot1Info) };
 
-        // Initialize MBI
+        // Inicializar MBI
         *mbi = Multiboot1Info {
             flags:              0,
             mem_lower:          0,
@@ -237,15 +237,15 @@ impl<'a> Multiboot1Protocol<'a> {
             color_info:         [0; 6],
         };
 
-        // TODO: Fill in:
-        // - Memory info (flags |= 1)
-        // - Command line (flags |= 4)
-        // - Modules (flags |= 8)
-        // - Memory map (flags |= 64)
-        // - Framebuffer info (flags |= 4096)
+        // TODO: Preencher:
+        // - Info de memória (flags |= 1)
+        // - Linha de comando (flags |= 4)
+        // - Módulos (flags |= 8)
+        // - Mapa de memória (flags |= 64)
+        // - Info de Framebuffer (flags |= 4096)
 
         if let Some(cmd) = cmdline {
-            // Allocate and copy command line
+            // Alocar e copiar linha de comando
             let cmd_bytes = cmd.as_bytes();
             let cmd_ptr = self.allocator.allocate_any(1)?;
             unsafe {
@@ -278,14 +278,14 @@ impl<'a> BootProtocol for Multiboot1Protocol<'a> {
         cmdline: Option<&str>,
         modules: &[LoadedFile],
     ) -> Result<BootInfo> {
-        // Find and parse header
+        // Encontrar e analisar cabeçalho
         let (header, _offset) = self.find_header(kernel)?;
         self.header = Some(header);
 
-        // Load kernel
+        // Carregar kernel
         self.load_kernel(kernel, &header)?;
 
-        // Create MBI
+        // Criar MBI
         let mbi_ptr = self.create_mbi(cmdline, modules)?;
 
         Ok(BootInfo {
@@ -296,7 +296,7 @@ impl<'a> BootProtocol for Multiboot1Protocol<'a> {
             boot_info_ptr: mbi_ptr,
             registers:     ProtocolRegisters {
                 rax: Some(MB1_BOOTLOADER_MAGIC as u64), // EAX = magic
-                rbx: Some(mbi_ptr),                     // EBX = MBI pointer
+                rbx: Some(mbi_ptr),                     // EBX = ponteiro MBI
                 ..Default::default()
             },
         })

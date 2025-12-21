@@ -29,7 +29,7 @@ pub enum BootError {
 /// Erros de sistema de arquivos
 #[derive(Debug)]
 pub enum FileSystemError {
-    /// Arquivo não encontrado (filename logged separately)
+    /// Arquivo não encontrado (nome do arquivo logado separadamente)
     FileNotFound,
     /// Erro ao ler arquivo
     ReadError,

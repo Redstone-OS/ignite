@@ -67,7 +67,7 @@ use crate::{
 /// * `mut system_table` - Tabela de sistema UEFI
 ///
 /// # Retorna
-/// Never returns - transfers control to kernel
+/// Nunca retorna - transfere o controle para o kernel
 pub fn boot(image_handle: Handle, mut system_table: SystemTable<Boot>) -> ! {
     // Inicializar serviços UEFI
     uefi::helpers::init(&mut system_table).unwrap();
@@ -105,7 +105,7 @@ pub fn boot(image_handle: Handle, mut system_table: SystemTable<Boot>) -> ! {
     // 3. Seleção de entrada (menu ou auto-boot)
     info!("Etapa 2/7: Selecionando entrada de boot...");
     let selected_index = select_boot_entry(&config);
-    let entry = config.entries[selected_index].clone(); // Clone para evitar lifetime issues
+    let entry = config.entries[selected_index].clone(); // Clone para evitar problemas de tempo de vida
 
     info!("Boot selecionado: {}", entry.name);
     info!("  Protocolo: {}", entry.protocol);
@@ -136,7 +136,7 @@ pub fn boot(image_handle: Handle, mut system_table: SystemTable<Boot>) -> ! {
     };
 
     // 7. Selecionar e usar protocolo apropriado
-    let protocol_name = entry.protocol.as_str(); // Get &str from String
+    let protocol_name = entry.protocol.as_str(); // Obter &str de String
     info!(
         "Etapa 6/7: Preparando boot com protocolo {}...",
         protocol_name
@@ -330,7 +330,7 @@ extern "C" fn jump_to_kernel_naked(entry: u64, boot_info: u64) -> ! {
 }
 
 // ═══════════════════════════════════════════════════════════════════════════
-// Helper Functions for New Boot System
+// Funções Auxiliares para o Novo Sistema de Boot
 // ═══════════════════════════════════════════════════════════════════════════
 
 /// Carrega configuração do arquivo ou usa configuração padrão

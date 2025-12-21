@@ -1,9 +1,10 @@
 use core::{cmp, mem, ptr};
 
-use crate::area_add;
-use crate::os::{OsMemoryEntry, OsMemoryKind};
-
 use super::{MEMORY_MAP_ADDR, thunk::ThunkData};
+use crate::{
+    area_add,
+    os::{OsMemoryEntry, OsMemoryKind},
+};
 
 #[repr(C, packed)]
 struct MemoryMapEntry {
@@ -14,8 +15,8 @@ struct MemoryMapEntry {
 
 pub struct MemoryMapIter {
     thunk15: extern "C" fn(),
-    data: ThunkData,
-    first: bool,
+    data:    ThunkData,
+    first:   bool,
 }
 
 impl MemoryMapIter {
@@ -46,7 +47,7 @@ impl Iterator for MemoryMapIter {
             self.data.with(self.thunk15);
         }
 
-        //TODO: return error?
+        // TODO: retornar erro?
         assert_eq!({ self.data.eax }, 0x534D4150);
         assert_eq!({ self.data.ecx }, mem::size_of::<MemoryMapEntry>() as u32);
 

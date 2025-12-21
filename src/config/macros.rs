@@ -1,6 +1,6 @@
-//! Macro System
+//! Sistema de Macros
 //!
-//! Supports ${MACRO_NAME} expansion in configuration
+//! Suporta expansão ${NOME_DA_MACRO} na configuração
 
 use alloc::{
     collections::BTreeMap,
@@ -8,7 +8,7 @@ use alloc::{
     string::{String, ToString},
 };
 
-/// Macro storage and expansion
+/// Armazenamento e expansão de macros
 pub struct MacroExpander {
     macros: BTreeMap<String, String>,
 }
@@ -25,9 +25,9 @@ impl MacroExpander {
         expander
     }
 
-    /// Define built-in macros
+    /// Definir macros embutidas
     fn define_builtin(&mut self) {
-        // Architecture
+        // Arquitetura
         #[cfg(target_arch = "x86_64")]
         self.macros.insert("ARCH".to_string(), "x86-64".to_string());
 
@@ -42,26 +42,26 @@ impl MacroExpander {
         self.macros
             .insert("ARCH".to_string(), "riscv64".to_string());
 
-        // Firmware type
+        // Tipo de Firmware
         #[cfg(target_os = "uefi")]
         self.macros
             .insert("FW_TYPE".to_string(), "UEFI".to_string());
 
-        // TODO: Add BIOS when supported
+        // TODO: Adicionar BIOS quando suportado
         // #[cfg(target_os = "bios")]
         // self.macros.insert("FW_TYPE".to_string(), "BIOS".to_string());
     }
 
-    /// Define a custom macro
+    /// Definir uma macro personalizada
     pub fn define(&mut self, name: String, value: String) {
         self.macros.insert(name, value);
     }
 
-    /// Expand macros in a string
+    /// Expandir macros em uma string
     pub fn expand(&self, input: &str) -> String {
         let mut result = String::from(input);
 
-        // Find and replace all ${MACRO} occurrences
+        // Encontrar e substituir todas as ocorrências de ${MACRO}
         for (name, value) in &self.macros {
             let pattern = format!("${{{}}}", name);
             result = result.replace(&pattern, value);
@@ -70,12 +70,12 @@ impl MacroExpander {
         result
     }
 
-    /// Check if a macro is defined
+    /// Verificar se uma macro está definida
     pub fn is_defined(&self, name: &str) -> bool {
         self.macros.contains_key(name)
     }
 
-    /// Get macro value
+    /// Obter valor da macro
     pub fn get(&self, name: &str) -> Option<&str> {
         self.macros.get(name).map(|s| s.as_str())
     }

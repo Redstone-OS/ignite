@@ -1,3 +1,8 @@
+//! RedstoneFS - Implementação básica do sistema de arquivos
+//!
+//! Este módulo contém as definições e implementações para leitura do
+//! RedstoneFS.
+
 use alloc::vec::Vec;
 use core::marker::PhantomData;
 

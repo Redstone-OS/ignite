@@ -1,3 +1,7 @@
+//! Módulo de arquitetura x86
+//!
+//! Contém implementações para x86 (x32) e x86_64.
+
 use crate::os::Os;
 
 pub(crate) mod x32;

@@ -1,6 +1,6 @@
-//! Boot Menu Implementation
+//! Implementação do Menu de Boot
 //!
-//! Interactive menu for selecting boot entries
+//! Menu interativo para seleção de entradas de boot
 
 use alloc::vec::Vec;
 
@@ -11,7 +11,7 @@ use crate::{
     error::Result,
 };
 
-/// Boot menu
+/// Menu de boot
 pub struct BootMenu<'a> {
     config:        &'a BootConfig,
     current_entry: usize,
@@ -25,7 +25,7 @@ impl<'a> BootMenu<'a> {
         }
     }
 
-    /// Display menu and wait for selection
+    /// Exibir menu e aguardar seleção
     pub fn show(&mut self) -> Result<&MenuEntry> {
         info!("═══════════════════════════════════════════════════");
         info!("  Boot Menu - Ignite Bootloader");
@@ -43,27 +43,27 @@ impl<'a> BootMenu<'a> {
         info!("═══════════════════════════════════════════════════");
         info!("Use ↑↓ to navigate, Enter to select, E to edit");
 
-        // TODO: Actual input handling
-        // For now, return selected entry
+        // TODO: Manipulação real de entrada
+        // Por enquanto, retorna a entrada selecionada
 
         Ok(&self.config.entries[self.current_entry])
     }
 
-    /// Navigate up in menu
+    /// Navegar para cima no menu
     pub fn move_up(&mut self) {
         if self.current_entry > 0 {
             self.current_entry -= 1;
         }
     }
 
-    /// Navigate down in menu
+    /// Navegar para baixo no menu
     pub fn move_down(&mut self) {
         if self.current_entry < self.config.entries.len() - 1 {
             self.current_entry += 1;
         }
     }
 
-    /// Get currently selected entry
+    /// Obter entrada atualmente selecionada
     pub fn current_entry(&self) -> &MenuEntry {
         &self.config.entries[self.current_entry]
     }

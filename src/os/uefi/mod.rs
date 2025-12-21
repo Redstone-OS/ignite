@@ -44,7 +44,7 @@ mod video_mode;
 pub use arch::efi_get_boot_hartid;
 
 pub(crate) fn page_size() -> usize {
-    // EDK2 always uses 4096 as the page size
+    // EDK2 sempre usa 4096 como tamanho de página
     4096
 }
 
@@ -61,22 +61,22 @@ pub(crate) fn alloc_zeroed_page_aligned(size: usize) -> *mut u8 {
     let pages = size.div_ceil(page_size);
 
     let ptr = {
-        // Max address mapped by src/arch paging code (8 GiB)
+        // Endereço máximo mapeado pelo código de paginação em src/arch (8 GiB)
         let mut ptr = 0x2_0000_0000;
         let mut st = uefi_services::system_table();
         let status = (st.boot_services().allocate_pages)(
             AllocateType::MaxAddress(ptr),
-            MemoryType::LOADER_DATA, // Use LOADER_DATA or equivalent
+            MemoryType::LOADER_DATA, // Usar LOADER_DATA ou equivalente
             pages,
         );
 
-        // Handling Result/Status if allocate_pages returns Status or Result
-        // uefi 0.28 allocate_pages returns uefi::Status usually, but wrapper returns
-        // Result. Wait, (st.boot_services().allocate_pages) calls the raw
-        // function pointer? No, boot_services() returns reference to
-        // BootServices table. allocate_pages is a method on BootServices.
-        // If I call it as a method: st.boot_services().allocate_pages(...)
-        // It returns Result<PhysAddr>.
+        // Lidar com Result/Status se allocate_pages retornar Status ou Result
+        // uefi 0.28 allocate_pages retorna uefi::Status geralmente, mas o wrapper
+        // retorna Result. Espera, (st.boot_services().allocate_pages) chama o
+        // ponteiro de função cru? Não, boot_services() retorna referência para
+        // tabela BootServices. allocate_pages é um método em BootServices.
+        // Se eu chamar como um método: st.boot_services().allocate_pages(...)
+        // Retorna Result<PhysAddr>.
 
         match st.boot_services().allocate_pages(
             AllocateType::MaxAddress(ptr),
@@ -106,7 +106,7 @@ impl OsEfi {
         {
             let guid = GraphicsOutput::GUID;
 
-            // Use locate_handle_buffer helper
+            // Usar auxiliar locate_handle_buffer
             match st
                 .boot_services()
                 .locate_handle_buffer(uefi::table::boot::SearchType::ByProtocol(&guid))
@@ -177,7 +177,7 @@ impl Os for OsEfi {
         &self,
         password_opt: Option<&[u8]>,
     ) -> syscall::Result<FileSystem<DiskOrFileEfi>> {
-        // Search for RedstoneOS on disks in prioritized order
+        // Buscar RedstoneOS em discos na ordem de prioridade
         println!("Looking for RedstoneOS:");
         for device in disk_device_priority() {
             if let Some(file_path) = device.file_path {
@@ -195,9 +195,9 @@ impl Os for OsEfi {
             match FileSystem::open(device.disk, password_opt, Some(block), false) {
                 Ok(ok) => return Ok(ok),
                 Err(err) => match err.errno {
-                    // Ignore header not found error
+                    // Ignorar erro de cabeçalho não encontrado
                     syscall::ENOENT => (),
-                    // Print any other errors
+                    // Imprimir quaisquer outros erros
                     _ => {
                         log::warn!("BlockIo error: {:?}", err);
                     },
@@ -229,7 +229,7 @@ impl Os for OsEfi {
     fn video_modes(&self, output_i: usize) -> VideoModeIter {
         let output_opt = match self.outputs.borrow_mut().get_mut(output_i) {
             Some(output) => unsafe {
-                // Hack to enable clone
+                // Hack para habilitar clone
                 let ptr = output.0.0 as *mut _;
                 Some(Output::new(&mut *ptr))
             },
@@ -239,7 +239,7 @@ impl Os for OsEfi {
     }
 
     fn set_video_mode(&self, output_i: usize, mode: &mut OsVideoMode) {
-        // TODO: return error?
+        // TODO: retornar erro?
         let mut outputs = self.outputs.borrow_mut();
         let (output, _efi_edid_opt) = &mut outputs[output_i];
 
@@ -248,13 +248,13 @@ impl Os for OsEfi {
         // Let's assume raw pointer access if Output wraps it.
         // Or if Output is a shim around standard protocol.
 
-        // For now trusting original logic but adapted
+        // Por agora confiando na lógica original mas adaptada
         // status_to_result((output.0.SetMode)(output.0, mode.id)).unwrap();
 
         // uefi-rs: protocol.set_mode(&mut mode_info)
-        // output.0 corresponds to GraphicsOutput
+        // output.0 corresponde a GraphicsOutput
 
-        // If Output struct wraps UnsafeCell<GraphicsOutput>
+        // Se a struct Output envolve UnsafeCell<GraphicsOutput>
         if let Some(mode_obj) = output.0.modes(st.boot_services()).nth(mode.id as usize) {
             match output.0.set_mode(&mode_obj) {
                 Ok(_) => {},
@@ -267,12 +267,12 @@ impl Os for OsEfi {
         let info = output.0.current_mode_info();
         mode.width = info.resolution().0 as u32;
         mode.height = info.resolution().1 as u32;
-        // FrameBufferBase is tricky.
-        // Try accessing via mode().frame_buffer_base() if available or raw.
-        // uefi 0.28: current_mode_info returns ModeInfo.
-        // checking ref docs: output.0.frame_buffer().as_mut_ptr() requires mapped?
-        // Let's rely on info.
-        // Or gop.mode().frame_buffer_base()?
+        // FrameBufferBase é complicado.
+        // Tentar acessar via mode().frame_buffer_base() se disponível ou cru.
+        // uefi 0.28: current_mode_info retorna ModeInfo.
+        // checando docs ref: output.0.frame_buffer().as_mut_ptr() requer mapeado?
+        // Vamos confiar em info.
+        // Ou gop.mode().frame_buffer_base()?
         mode.base = output.0.frame_buffer().as_mut_ptr() as u64;
     }
 
@@ -294,14 +294,14 @@ impl Os for OsEfi {
             }
         }
 
-        // Fallback to the current output resolution
+        // Fallback para a resolução de saída atual
         // output.0.Mode.Info...
         let info = output.0.current_mode_info();
         Some((info.resolution().0 as u32, info.resolution().1 as u32))
     }
 
     fn get_key(&self) -> OsKey {
-        // TODO: do not unwrap
+        // TODO: não usar unwrap
         let event = &self
             .st
             .boot_services()
@@ -317,8 +317,8 @@ impl Os for OsEfi {
             Err(_) => return OsKey::Other,
         };
 
-        // Convert key to OsKey
-        // Based on uefi::proto::console::text::Key
+        // Converter tecla para OsKey
+        // Baseado em uefi::proto::console::text::Key
         match key {
             TextInputKey::Printable(c) => {
                 let ch: char = c.into();
@@ -349,7 +349,7 @@ impl Os for OsEfi {
     }
 
     fn get_text_position(&self) -> (usize, usize) {
-        // Not easily accessible in uefi-rs output?
+        // Não é facilmente acessível na saída uefi-rs?
         (0, 0) // Placeholder
     }
 
@@ -380,7 +380,7 @@ fn status_to_result(status: Status) -> uefi::Result<usize> {
     }
 }
 
-// remove set_max_mode if handled
+// remover set_max_mode se tratado
 
 #[uefi_macros::entry]
 fn main(image: Handle, mut st: SystemTable<uefi::table::Boot>) -> Status {
@@ -389,15 +389,15 @@ fn main(image: Handle, mut st: SystemTable<uefi::table::Boot>) -> Status {
     }
     uefi_services::init(&mut st).unwrap();
 
-    // Disable Watchdog
+    // Desabilitar Watchdog
     let _ = st.boot_services().set_watchdog_timer(0, 0, None);
 
-    // Call Arch Main
+    // Chamar Main da Arquitetura
     if let Err(err) = arch::main() {
         panic!("App error: {:?}", err);
     }
 
-    // Reset System
+    // Resetar Sistema
     st.runtime_services()
         .reset(ResetType::Cold, Status::SUCCESS, None);
 }

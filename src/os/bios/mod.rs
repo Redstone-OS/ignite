@@ -28,15 +28,15 @@ mod thunk;
 mod vbe;
 mod vga;
 
-// Real mode memory allocation, for use with thunk
-// 0x500 to 0x7BFF is free
-const DISK_BIOS_ADDR: usize = 0x70000; // 64 KiB at 448 KiB, ends at 512 KiB
-const VBE_CARD_INFO_ADDR: usize = 0x1000; // 512 bytes, ends at 0x11FF
-const VBE_MODE_INFO_ADDR: usize = 0x1200; // 256 bytes, ends at 0x12FF
-const VBE_EDID_ADDR: usize = 0x1300; // 128 bytes, ends at 0x137F
-const MEMORY_MAP_ADDR: usize = 0x1380; // 24 bytes, ends at 0x1397
-const DISK_ADDRESS_PACKET_ADDR: usize = 0x1398; // 16 bytes, ends at 0x13A7
-const THUNK_STACK_ADDR: usize = 0x7C00; // Grows downwards
+// Alocação de memória em modo real, para uso com thunk
+// 0x500 a 0x7BFF está livre
+const DISK_BIOS_ADDR: usize = 0x70000; // 64 KiB em 448 KiB, termina em 512 KiB
+const VBE_CARD_INFO_ADDR: usize = 0x1000; // 512 bytes, termina em 0x11FF
+const VBE_MODE_INFO_ADDR: usize = 0x1200; // 256 bytes, termina em 0x12FF
+const VBE_EDID_ADDR: usize = 0x1300; // 128 bytes, termina em 0x137F
+const MEMORY_MAP_ADDR: usize = 0x1380; // 24 bytes, termina em 0x1397
+const DISK_ADDRESS_PACKET_ADDR: usize = 0x1398; // 16 bytes, termina em 0x13A7
+const THUNK_STACK_ADDR: usize = 0x7C00; // Cresce para baixo
 const VGA_ADDR: usize = 0xB8000;
 
 #[global_allocator]
@@ -77,24 +77,23 @@ pub struct Xsdp {
 
 unsafe fn search_rsdp(start: usize, end: usize) -> Option<(u64, u64)> {
     unsafe {
-        // Align start up to 16 bytes
+        // Alinhar início para cima para 16 bytes
         let mut addr = start.div_ceil(16) * 16;
-        // Search until reading the end of the Rsdp would be past the end of the memory
-        // area
+        // Buscar até que a leitura do fim do Rsdp passe do fim da área de memória
         while addr + mem::size_of::<Rsdp>() <= end {
             let rsdp = ptr::read(addr as *const Rsdp);
             if &rsdp.signature == b"RSD PTR " {
-                // TODO: check checksum?
+                // TODO: checar checksum?
                 if rsdp.revision == 0 {
                     return Some((addr as u64, mem::size_of::<Rsdp>() as u64));
                 } else if rsdp.revision == 2 {
                     let xsdp = ptr::read(addr as *const Xsdp);
-                    // TODO: check extended checksum?
+                    // TODO: checar checksum estendido?
                     return Some((addr as u64, xsdp.length as u64));
                 }
             }
 
-            // Rsdp is always aligned to 16 bytes
+            // Rsdp é sempre alinhado em 16 bytes
             addr += 16;
         }
         None
@@ -132,20 +131,20 @@ impl Os for OsBios {
     ) -> syscall::Result<redstonefs::FileSystem<DiskBios>> {
         let disk = DiskBios::new(u8::try_from(self.boot_disk).unwrap(), self.thunk13);
 
-        // TODO: get block from partition table
+        // TODO: obter bloco da tabela de partição
         let block = 2 * crate::MIBI as u64 / redstonefs::BLOCK_SIZE;
         redstonefs::FileSystem::open(disk, password_opt, Some(block), false)
     }
 
     fn hwdesc(&self) -> OsHwDesc {
-        // See ACPI specification - Finding the RSDP on IA-PC Systems
+        // Ver especificação ACPI - Finding the RSDP on IA-PC Systems
         unsafe {
             let ebda_segment = ptr::read(0x40E as *const u16);
             let ebda_addr = (ebda_segment as usize) << 4;
             if let Some((addr, size)) =
                 search_rsdp(ebda_addr, ebda_addr + 1024).or(search_rsdp(0xE0000, 0xFFFFF))
             {
-                // Copy to a page
+                // Copiar para uma página
                 let page_aligned = self.alloc_zeroed_page_aligned(size as usize);
                 ptr::copy(addr as *const u8, page_aligned, size as usize);
                 return OsHwDesc::Acpi(page_aligned as u64, size);
@@ -155,7 +154,7 @@ impl Os for OsBios {
     }
 
     fn video_outputs(&self) -> usize {
-        // TODO: return 1 only if vbe supported?
+        // TODO: retornar 1 apenas se vbe suportado?
         1
     }
 
@@ -164,14 +163,14 @@ impl Os for OsBios {
     }
 
     fn set_video_mode(&self, _output_i: usize, mode: &mut OsVideoMode) {
-        // Set video mode
+        // Definir modo de vídeo
         let mut data = ThunkData::new();
         data.eax = 0x4F02;
         data.ebx = mode.id;
         unsafe {
             data.with(self.thunk10);
         }
-        // TODO: check result
+        // TODO: checar resultado
     }
 
     fn best_resolution(&self, _output_i: usize) -> Option<(u32, u32)> {
@@ -199,7 +198,7 @@ impl Os for OsBios {
     }
 
     fn get_key(&self) -> OsKey {
-        // Read keypress
+        // Ler pressionamento de tecla
         let mut data = ThunkData::new();
         unsafe {
             data.with(self.thunk16);
@@ -220,7 +219,7 @@ impl Os for OsBios {
     }
 
     fn clear_text(&self) {
-        // TODO: clear screen for VGA
+        // TODO: limpar tela para VGA
     }
 
     fn get_text_position(&self) -> (usize, usize) {
@@ -229,7 +228,7 @@ impl Os for OsBios {
     }
 
     fn set_text_position(&self, x: usize, y: usize) {
-        // TODO: ensure this is inside bounds!
+        // TODO: garantir que isso esteja dentro dos limites!
         let mut vga = VGA.lock();
         vga.x = x;
         vga.y = y;
@@ -271,24 +270,24 @@ pub unsafe extern "C" fn start(
         }
 
         {
-            // Make sure we are in mode 3 (80x25 text mode)
+            // Certificar que estamos no modo 3 (modo texto 80x25)
             let mut data = ThunkData::new();
             data.eax = 0x03;
             data.with(thunk10);
         }
 
         {
-            // Disable cursor
+            // Desabilitar cursor
             let mut data = ThunkData::new();
             data.eax = 0x0100;
             data.ecx = 0x3F00;
             data.with(thunk10);
         }
 
-        // Clear screen
+        // Limpar tela
         VGA.lock().clear();
 
-        // Set logger
+        // Definir logger
         LOGGER.init();
 
         let mut os = OsBios {

@@ -1,6 +1,6 @@
-//! Path Resolution System
+//! Sistema de Resolução de Caminhos
 //!
-//! Handles different path formats:
+//! Lida com diferentes formatos de caminho:
 //! - boot():/path
 //! - boot(2):/path
 //! - hdd(1:2):/path
@@ -13,30 +13,30 @@ use alloc::{
 };
 use core::fmt;
 
-/// Path resource type
+/// Tipo de recurso de caminho
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub enum PathResource {
-    /// boot() or boot(N) - Boot partition
+    /// boot() ou boot(N) - Partição de boot
     Boot(Option<u32>),
 
-    /// hdd(D:P) - Hard disk drive and partition
+    /// hdd(D:P) - Disco rígido e partição
     Hdd(u32, Option<u32>),
 
-    /// odd(D:P) - Optical disk drive
+    /// odd(D:P) - Unidade de disco óptico
     Odd(u32, Option<u32>),
 
-    /// guid(UUID) or uuid(UUID) - Partition GUID
+    /// guid(UUID) ou uuid(UUID) - GUID da partição
     Guid(String),
 
-    /// fslabel(LABEL) - Filesystem label
+    /// fslabel(LABEL) - Rótulo do sistema de arquivos
     FsLabel(String),
 
-    /// tftp(IP) - Network TFTP (PXE только)
+    /// tftp(IP) - Rede TFTP (PXE apenas)
     Tftp(Option<String>),
 }
 
 impl PathResource {
-    /// Parse resource from string like "boot(2)" or "guid(xxx)"
+    /// Parsear recurso de string como "boot(2)" ou "guid(xxx)"
     pub fn parse(s: &str) -> Option<(Self, usize)> {
         if let Some(paren_pos) = s.find('(') {
             let resource_type = &s[..paren_pos];
@@ -54,7 +54,7 @@ impl PathResource {
                         Some(PathResource::Boot(partition))
                     },
                     "hdd" => {
-                        // Parse "D:P" format
+                        // Parsear formato "D:P"
                         if let Some(colon_pos) = arg.find(':') {
                             let drive = arg[..colon_pos].parse::<u32>().ok()?;
                             let partition = if arg[colon_pos + 1..].is_empty() {
@@ -118,23 +118,23 @@ impl fmt::Display for PathResource {
     }
 }
 
-/// Complete path with resource and file path
+/// Caminho completo com recurso e caminho de arquivo
 #[derive(Debug, Clone)]
 pub struct Path {
-    /// Resource (boot device, partition, etc.)
+    /// Recurso (dispositivo de boot, partição, etc.)
     pub resource: PathResource,
 
-    /// File path on the resource
+    /// Caminho do arquivo no recurso
     pub path: String,
 
-    /// Optional BLAKE2B hash for verification
+    /// Hash BLAKE2B opcional para verificação
     pub hash: Option<String>,
 }
 
 impl Path {
-    /// Parse a full path like "boot(2):/kernel#hash"
+    /// Parsear um caminho completo como "boot(2):/kernel#hash"
     pub fn parse(s: &str) -> Option<Self> {
-        // Check for hash at the end
+        // Verificar hash no final
         let (path_part, hash) = if let Some(hash_pos) = s.rfind('#') {
             let hash = s[hash_pos + 1..].to_string();
             (&s[..hash_pos], Some(hash))
@@ -142,17 +142,17 @@ impl Path {
             (s, None)
         };
 
-        // Find ":" separator
+        // Encontrar separador ":"
         let colon_pos = path_part.find(':')?;
 
-        // Parse resource
+        // Parsear recurso
         let (resource, consumed) = PathResource::parse(path_part)?;
 
         if consumed != colon_pos {
-            return None; // Resource didn't end at colon
+            return None; // Recurso não terminou nos dois pontos
         }
 
-        // Get file path (skip the colon)
+        // Obter caminho do arquivo (pular os dois pontos)
         let file_path = path_part[colon_pos + 1..].to_string();
 
         Some(Path {

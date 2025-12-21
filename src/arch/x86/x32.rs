@@ -1,6 +1,9 @@
-use crate::area_add;
-use crate::os::{Os, OsMemoryEntry, OsMemoryKind};
 use core::slice;
+
+use crate::{
+    area_add,
+    os::{Os, OsMemoryEntry, OsMemoryKind},
+};
 
 const PAGE_ENTRIES: usize = 1024;
 const PAGE_SIZE: usize = 4096;
@@ -25,14 +28,15 @@ unsafe fn paging_allocate(os: &impl Os) -> Option<&'static mut [u32]> {
 pub unsafe fn paging_create(os: &impl Os, kernel_phys: u64, kernel_size: u64) -> Option<usize> {
     unsafe {
         let pd = paging_allocate(os)?;
-        //Identity map 1 GiB using 4 MiB pages, also map at PHYS_OFFSET
+        // Mapeamento de identidade de 1 GiB usando páginas de 4 MiB, também mapear em
+        // PHYS_OFFSET
         for pd_i in 0..256 {
             let addr = pd_i as u32 * 0x40_0000;
             pd[pd_i] = addr | 1 << 7 | 1 << 1 | 1;
             pd[pd_i + 512] = addr | 1 << 7 | 1 << 1 | 1;
         }
 
-        // Map kernel_size at kernel offset
+        // Mapear kernel_size no offset do kernel
         let mut kernel_mapped = 0;
         let mut pd_i = 0xC000_0000 / 0x40_0000;
         while kernel_mapped < kernel_size && pd_i < pd.len() {
@@ -61,11 +65,11 @@ pub unsafe fn paging_framebuffer(
     framebuffer_size: u64,
 ) -> Option<u64> {
     unsafe {
-        let framebuffer_virt = 0xD000_0000; // 256 MiB after kernel mapping, but before heap mapping
+        let framebuffer_virt = 0xD000_0000; // 256 MiB após mapeamento do kernel, mas antes do mapeamento de heap
 
         let pd = slice::from_raw_parts_mut(page_phys as *mut u32, PAGE_ENTRIES);
 
-        // Map framebuffer_size at framebuffer offset
+        // Mapear framebuffer_size no offset do framebuffer
         let mut framebuffer_mapped = 0;
         let mut pd_i = framebuffer_virt / 0x40_0000;
         while framebuffer_mapped < framebuffer_size && pd_i < pd.len() {

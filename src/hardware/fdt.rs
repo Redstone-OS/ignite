@@ -1,8 +1,8 @@
-//! Device Tree (FDT) Support
+//! Suporte a Device Tree (FDT)
 //!
-//! For ARM64 and RISC-V systems
+//! Para sistemas ARM64 e RISC-V
 
-/// FDT Header
+/// Cabeçalho FDT
 #[repr(C)]
 #[derive(Debug, Copy, Clone)]
 pub struct FdtHeader {
@@ -20,17 +20,17 @@ pub struct FdtHeader {
 
 const FDT_MAGIC: u32 = 0xd00dfeed;
 
-/// Device Tree manager
+/// Gerenciador de Device Tree
 pub struct DeviceTree {
     fdt_addr: u64,
 }
 
 impl DeviceTree {
-    /// Load device tree from address
+    /// Carregar device tree a partir de endereço
     pub fn from_address(addr: u64) -> Option<Self> {
         let header = unsafe { &*(addr as *const FdtHeader) };
 
-        // Validate magic (big-endian)
+        // Validar magic (big-endian)
         if u32::from_be(header.magic) != FDT_MAGIC {
             return None;
         }
@@ -38,13 +38,13 @@ impl DeviceTree {
         Some(Self { fdt_addr: addr })
     }
 
-    /// Get FDT size
+    /// Obter tamanho do FDT
     pub fn size(&self) -> u32 {
         let header = unsafe { &*(self.fdt_addr as *const FdtHeader) };
         u32::from_be(header.totalsize)
     }
 
-    /// Get FDT as slice
+    /// Obter FDT como slice
     pub fn as_slice(&self) -> &[u8] {
         let size = self.size() as usize;
         unsafe { core::slice::from_raw_parts(self.fdt_addr as *const u8, size) }

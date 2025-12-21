@@ -1,46 +1,46 @@
-//! Configuration Types
+//! Tipos de Configuração
 //!
-//! Data structures for boot configuration
+//! Estruturas de dados para configuração de boot
 
 use alloc::{string::String, vec::Vec};
 
-/// Complete boot configuration
+/// Configuração completa de boot
 #[derive(Debug, Clone)]
 pub struct BootConfig {
-    /// Timeout in seconds before auto-boot (None = no timeout)
+    /// Timeout em segundos antes do auto-boot (None = sem timeout)
     pub timeout: Option<u32>,
 
-    /// Default entry index (1-based)
+    /// Índice da entrada padrão (1-based)
     pub default_entry: usize,
 
-    /// Quiet mode (suppress output)
+    /// Modo silencioso (suprimir saída)
     pub quiet: bool,
 
-    /// Enable serial output
+    /// Habilitar saída serial
     pub serial: bool,
 
-    /// Serial baudrate (BIOS only)
+    /// Baudrate serial (Apenas BIOS)
     pub serial_baudrate: u32,
 
-    /// Verbose mode
+    /// Modo verboso
     pub verbose: bool,
 
-    /// Interface resolution (WxH)
+    /// Resolução da interface (WxH)
     pub interface_resolution: Option<(u32, u32)>,
 
-    /// Interface branding text
+    /// Texto de branding da interface
     pub interface_branding: Option<String>,
 
-    /// Wallpaper path
+    /// Caminho do wallpaper
     pub wallpaper: Option<String>,
 
-    /// Wallpaper style: tiled, centered, stretched
+    /// Estilo do wallpaper: tiled, centered, stretched
     pub wallpaper_style: WallpaperStyle,
 
-    /// Editor enabled
+    /// Editor habilitado
     pub editor_enabled: bool,
 
-    /// Menu entries
+    /// Entradas de menu
     pub entries: Vec<MenuEntry>,
 }
 
@@ -63,43 +63,43 @@ impl Default for BootConfig {
     }
 }
 
-/// Menu entry
+/// Entrada de menu
 #[derive(Debug, Clone)]
 pub struct MenuEntry {
-    /// Entry name/title
+    /// Nome/título da entrada
     pub name: String,
 
-    /// Comment displayed when selected
+    /// Comentário exibido quando selecionado
     pub comment: Option<String>,
 
-    /// Boot protocol: limine, linux, multiboot1, multiboot2, efi, bios
+    /// Protocolo de boot: limine, linux, multiboot1, multiboot2, efi, bios
     pub protocol: String,
 
-    /// Kernel/executable path
+    /// Caminho do kernel/executável
     pub kernel_path: String,
 
-    /// Command line arguments
+    /// Argumentos de linha de comando
     pub cmdline: Option<String>,
 
-    /// Modules/initrd
+    /// Módulos/initrd
     pub modules: Vec<Module>,
 
-    /// Video resolution (WxHxBPP)
+    /// Resolução de vídeo (WxHxBPP)
     pub resolution: Option<(u32, u32, u32)>,
 
-    /// Text mode (BIOS only)
+    /// Modo texto (apenas BIOS)
     pub textmode: bool,
 
-    /// Device tree blob path
+    /// Caminho do device tree blob
     pub dtb_path: Option<String>,
 
-    /// KASLR enabled
+    /// KASLR habilitado
     pub kaslr: bool,
 
-    /// Sub-entries (for hierarchical menus)
+    /// Sub-entradas (para menus hierárquicos)
     pub sub_entries: Vec<MenuEntry>,
 
-    /// Expanded by default
+    /// Expandido por padrão
     pub expanded: bool,
 }
 
@@ -122,17 +122,17 @@ impl MenuEntry {
     }
 }
 
-/// Module (initrd, ramdisk, etc.)
+/// Módulo (initrd, ramdisk, etc.)
 #[derive(Debug, Clone)]
 pub struct Module {
-    /// Module path
+    /// Caminho do módulo
     pub path: String,
 
-    /// Module command line / string
+    /// Linha de comando / string do módulo
     pub cmdline: Option<String>,
 }
 
-/// Wallpaper style
+/// Estilo de wallpaper
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub enum WallpaperStyle {
     Tiled,

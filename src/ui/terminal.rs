@@ -1,10 +1,10 @@
-//! Graphical Terminal
+//! Terminal Gráfico
 //!
-//! Text rendering on framebuffer
+//! Renderização de texto no framebuffer
 
 use alloc::vec::Vec;
 
-/// Graphical terminal for rendering text
+/// Terminal gráfico para renderização de texto
 pub struct GraphicalTerminal {
     width:       u32,
     height:      u32,
@@ -16,7 +16,7 @@ pub struct GraphicalTerminal {
 
 impl GraphicalTerminal {
     pub fn new(width: u32, height: u32) -> Self {
-        // Assume 8x16 font
+        // Assume fonte 8x16
         let cols = width / 8;
         let rows = height / 16;
 
@@ -30,13 +30,13 @@ impl GraphicalTerminal {
         }
     }
 
-    /// Write a character
+    /// Escrever um caractere
     pub fn putchar(&mut self, c: char) {
         match c {
             '\n' => self.newline(),
             '\r' => self.current_col = 0,
             _ => {
-                // TODO: Render character to framebuffer
+                // TODO: Renderizar caractere no framebuffer
                 self.current_col += 1;
                 if self.current_col >= self.cols {
                     self.newline();
@@ -45,7 +45,7 @@ impl GraphicalTerminal {
         }
     }
 
-    /// Write a string
+    /// Escrever uma string
     pub fn write_str(&mut self, s: &str) {
         for c in s.chars() {
             self.putchar(c);
@@ -61,13 +61,13 @@ impl GraphicalTerminal {
     }
 
     fn scroll(&mut self) {
-        // TODO: Implement scrolling
+        // TODO: Implementar rolagem (scrolling)
         self.current_row = self.rows - 1;
     }
 
-    /// Clear screen
+    /// Limpar tela
     pub fn clear(&mut self) {
-        // TODO: Clear framebuffer
+        // TODO: Limpar framebuffer
         self.current_row = 0;
         self.current_col = 0;
     }

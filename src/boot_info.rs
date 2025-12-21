@@ -1,4 +1,4 @@
-//! Boot Information Structure
+//! Estrutura de Informações de Boot
 //!
 //! Estrutura compartilhada entre bootloader e kernel.
 //! Contém informações sobre hardware e recursos disponíveis.

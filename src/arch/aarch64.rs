@@ -1,6 +1,9 @@
-use crate::area_add;
-use crate::os::{Os, OsMemoryEntry, OsMemoryKind, dtb::is_in_dev_mem_region};
 use core::slice;
+
+use crate::{
+    area_add,
+    os::{Os, OsMemoryEntry, OsMemoryKind, dtb::is_in_dev_mem_region},
+};
 
 pub(crate) const PF_PRESENT: u64 = 1 << 0;
 pub(crate) const PF_TABLE: u64 = 1 << 1;
@@ -34,33 +37,33 @@ unsafe fn paging_allocate(os: &impl Os) -> Option<&'static mut [u64]> {
 
 pub unsafe fn paging_create(os: &impl Os, kernel_phys: u64, kernel_size: u64) -> Option<usize> {
     unsafe {
-        // Create L0
+        // Criar L0
         let l0 = paging_allocate(os)?;
 
         {
-            // Create L1 for identity mapping
+            // Criar L1 para mapeamento de identidade
             let l1 = paging_allocate(os)?;
 
-            // Link first user and first kernel L0 entry to L1
+            // Linkar primeira entrada L0 de usuário e primeira de kernel para L1
             l0[0] = l1.as_ptr() as u64 | PF_ACCESS | PF_TABLE | PF_PRESENT;
             l0[256] = l1.as_ptr() as u64 | PF_ACCESS | PF_TABLE | PF_PRESENT;
 
-            // Identity map 8 GiB using 1 GiB pages
+            // Mapeamento de identidade de 8 GiB usando páginas de 1 GiB
             for l1_i in 0..8 {
                 let addr = l1_i as u64 * 0x4000_0000;
-                //TODO: is PF_RAM okay?
+                // TODO: PF_RAM está ok?
                 l1[l1_i] = addr | PF_ACCESS | PF_DEV | PF_PRESENT;
             }
         }
 
         {
-            // Create L1 for kernel mapping
+            // Criar L1 para mapeamento do kernel
             let l1 = paging_allocate(os)?;
 
-            // Link second to last L0 entry to L1
+            // Linkar penúltima entrada L0 para L1
             l0[510] = l1.as_ptr() as u64 | PF_ACCESS | PF_TABLE | PF_PRESENT;
 
-            // Map kernel_size at kernel offset
+            // Mapear kernel_size no offset do kernel
             let mut kernel_mapped = 0;
             let mut l1_i = 0;
             while kernel_mapped < kernel_size && l1_i < l1.len() {
@@ -97,7 +100,7 @@ pub unsafe fn paging_framebuffer(
     framebuffer_size: u64,
 ) -> Option<u64> {
     unsafe {
-        //TODO: smarter test for framebuffer already mapped
+        // TODO: teste mais inteligente para framebuffer já mapeado
         if framebuffer_phys + framebuffer_size <= 0x2_0000_0000 {
             return Some(framebuffer_phys + PHYS_OFFSET);
         }
@@ -110,7 +113,7 @@ pub unsafe fn paging_framebuffer(
 
         let l0 = slice::from_raw_parts_mut(page_phys as *mut u64, PAGE_ENTRIES);
 
-        // Create l1 for framebuffer mapping
+        // Criar l1 para mapeamento de framebuffer
         let l1 = if l0[l0_i] == 0 {
             let l1 = paging_allocate(os)?;
             l0[l0_i] = l1.as_ptr() as u64 | PF_ACCESS | PF_TABLE | PF_PRESENT;
@@ -119,7 +122,7 @@ pub unsafe fn paging_framebuffer(
             slice::from_raw_parts_mut((l0[l0_i] & ENTRY_ADDRESS_MASK) as *mut u64, PAGE_ENTRIES)
         };
 
-        // Map framebuffer_size at framebuffer offset
+        // Mapear framebuffer_size no offset do framebuffer
         let mut framebuffer_mapped = 0;
         while framebuffer_mapped < framebuffer_size && l1_i < l1.len() {
             let l2 = paging_allocate(os)?;
@@ -134,7 +137,7 @@ pub unsafe fn paging_framebuffer(
                 while framebuffer_mapped < framebuffer_size && l3_i < l3.len() {
                     let addr = framebuffer_phys + framebuffer_mapped;
                     assert_eq!(l3[l3_i], 0);
-                    //TODO: is PF_RAM okay?
+                    // TODO: PF_RAM está ok?
                     l3[l3_i] = addr | PF_ACCESS | PF_RAM | PF_TABLE | PF_PRESENT;
                     framebuffer_mapped += PAGE_SIZE as u64;
                     l3_i += 1;

@@ -29,8 +29,8 @@ fn get_protocol<P: Protocol>(handle: Handle) -> uefi::Result<&'static mut P> {
             OpenProtocolAttributes::GET_PROTOCOL,
         )?;
 
-        // Convert to &mut static through transmutation, assuming it lives
-        // forever/bootloader duration
+        // Converter para &mut static através de transmutação, assumindo que vive
+        // para sempre/duração do bootloader
         let interface = protocol.interface.get();
         Ok(&mut *interface)
     }
@@ -128,8 +128,8 @@ pub struct DiskDevice {
 }
 
 pub fn disk_device_priority() -> Vec<DiskDevice> {
-    // Get the handle of the partition this program was loaded from, which should be
-    // the ESP
+    // Obter o handle da partição de onde este programa foi carregado, que deve ser
+    // a ESP
     let esp_handle = match get_protocol::<LoadedImage>(crate::os::uefi::image_handle()) {
         Ok(loaded_image) => loaded_image.device(),
         Err(err) => {
@@ -138,8 +138,8 @@ pub fn disk_device_priority() -> Vec<DiskDevice> {
         },
     };
 
-    // Get the device path of the ESP
-    // Get the device path of the ESP
+    // Obter o caminho do dispositivo da ESP
+    // Obter o caminho do dispositivo da ESP
     let esp_device_path = match get_protocol::<uefi::proto::device_path::DevicePath>(esp_handle) {
         Ok(p) => DevicePathProtocol(p),
         Err(err) => {
@@ -153,14 +153,14 @@ pub fn disk_device_priority() -> Vec<DiskDevice> {
     };
 
     if cfg!(feature = "live") {
-        // First try to get a live image from redstone-live.iso. This is required to
-        // support netbooting.
+        // Primeiro tentar obter uma imagem live de redstone-live.iso. Isso é necessário para
+        // suportar netbooting.
         if let Some(buffer) = esp_live_image(esp_handle, esp_device_path.0) {
             return vec![DiskDevice {
                 handle:           esp_handle.expect("ESP Handle missing"),
-                // Support both a copy of livedisk.iso and a standalone redstonefs partition
+                // Suportar tanto uma cópia de livedisk.iso quanto uma partição redstonefs independente
                 partition_offset: if &buffer[512..520] == b"EFI PART" {
-                    // TODO: get block from partition table
+                    // TODO: obter bloco da tabela de partição
                     2 * crate::MIBI as u64
                 } else {
                     0
@@ -172,8 +172,8 @@ pub fn disk_device_priority() -> Vec<DiskDevice> {
         }
     }
 
-    // Get all block I/O handles along with their block I/O implementations and
-    // device paths
+    // Obter todos os handles de E/S de bloco junto com suas implementações de E/S de bloco e
+    // caminhos de dispositivo
     let handles = match DiskEfi::locate_handle() {
         Ok(ok) => ok,
         Err(err) => {
@@ -216,7 +216,7 @@ pub fn disk_device_priority() -> Vec<DiskDevice> {
             partition_offset: if disk.0.Media.LogicalPartition {
                 0
             } else {
-                // TODO: get block from partition table
+                // TODO: obter bloco da tabela de partição
                 2 * crate::MIBI as u64
             },
             disk: DiskOrFileEfi::Disk(disk),
@@ -225,7 +225,7 @@ pub fn disk_device_priority() -> Vec<DiskDevice> {
         });
     }
 
-    // Find possible boot disks
+    // Encontrar possíveis discos de boot
     let mut boot_disks = Vec::with_capacity(1);
     {
         let mut i = 0;
@@ -241,12 +241,12 @@ pub fn disk_device_priority() -> Vec<DiskDevice> {
         }
     }
 
-    // Find all children of possible boot devices
+    // Encontrar todos os filhos de possíveis dispositivos de boot
     let mut priority = Vec::with_capacity(devices.capacity());
     for boot_disk in boot_disks {
         let mut i = 0;
         while i < devices.len() {
-            // Only prioritize non-ESP devices
+            // Priorizar apenas dispositivos não-ESP
             if devices[i].handle != esp_handle.expect("ESP Handle check failed") {
                 if let DevicePathRelation::Child(0) =
                     device_path_relation(devices[i].device_path.0, boot_disk.device_path.0)
@@ -262,7 +262,7 @@ pub fn disk_device_priority() -> Vec<DiskDevice> {
         priority.push(boot_disk);
     }
 
-    // Add any remaining devices
+    // Adicionar quaisquer dispositivos restantes
     priority.extend(devices);
 
     priority
@@ -486,11 +486,11 @@ pub struct DevicePathProtocol(pub &'static mut DevicePath);
 unsafe impl Identify for DevicePathProtocol {
     const GUID: Guid = uefi::proto::device_path::DevicePath::GUID;
 }
-// Remove impl Protocol for wrapper if unnecessary, or implement empty if
-// Identify is present But we use get_protocol::<DevicePathProtocol> in mod.rs?
-// No, mod.rs uses get_protocol::<GraphicsOutput>.
-// In device.rs, we use DevicePathProtocol::handle_protocol?
-// We should replace with get_protocol::<DevicePath>.
+// Remover impl Protocol para wrapper se desnecessário, ou implementar vazio se
+// Identify estiver presente Mas usamos get_protocol::<DevicePathProtocol> em mod.rs?
+// Não, mod.rs usa get_protocol::<GraphicsOutput>.
+// Em device.rs, usamos DevicePathProtocol::handle_protocol?
+// Devemos substituir com get_protocol::<DevicePath>.
 
 impl Protocol for DevicePathProtocol {}
 

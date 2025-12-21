@@ -1,10 +1,10 @@
-//! BLAKE2B Hash Implementation
+//! Implementação de Hash BLAKE2B
 //!
-//! For file integrity verification
+//! Para verificação de integridade de arquivos
 
 use core::mem;
 
-/// BLAKE2B state
+/// Estado BLAKE2B
 pub struct Blake2b {
     h:       [u64; 8],
     t:       [u64; 2],
@@ -14,10 +14,10 @@ pub struct Blake2b {
 }
 
 impl Blake2b {
-    /// Create new BLAKE2B hasher with given output length
+    /// Criar novo hasher BLAKE2B com comprimento de saída dado
     pub fn new(outlen: usize) -> Self {
-        // TODO: Implement proper BLAKE2B initialization
-        // This is a placeholder structure
+        // TODO: Implementar inicialização BLAKE2B apropriada
+        // Esta é uma estrutura de placeholder
 
         Self {
             h:       [0; 8],
@@ -28,19 +28,19 @@ impl Blake2b {
         }
     }
 
-    /// Update hash with data
+    /// Atualizar hash com dados
     pub fn update(&mut self, data: &[u8]) {
-        // TODO: Implement BLAKE2B update
-        // For now, this is a stub
+        // TODO: Implementar atualização BLAKE2B
+        // Por enquanto, isso é um stub
     }
 
-    /// Finalize and get hash
+    /// Finalizar e obter hash
     pub fn finalize(&mut self) -> [u8; 64] {
-        // TODO: Implement BLAKE2B finalization
+        // TODO: Implementar finalização BLAKE2B
         [0; 64]
     }
 
-    /// Hash data in one call
+    /// Hash de dados em uma chamada
     pub fn hash(data: &[u8]) -> [u8; 64] {
         let mut hasher = Self::new(64);
         hasher.update(data);
@@ -48,12 +48,12 @@ impl Blake2b {
     }
 }
 
-/// Verify file hash
+/// Verificar hash de arquivo
 pub fn verify_hash(data: &[u8], expected_hash: &str) -> bool {
     let hash = Blake2b::hash(data);
 
-    // Convert hash to hex string and compare
-    // TODO: Implement proper hex comparison
+    // Converter hash para string hex e comparar
+    // TODO: Implementar comparação hex apropriada
 
     true // Placeholder
 }

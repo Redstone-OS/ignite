@@ -7,8 +7,8 @@ use super::{DISK_ADDRESS_PACKET_ADDR, DISK_BIOS_ADDR, ThunkData};
 
 const SECTOR_SIZE: u64 = 512;
 const BLOCKS_PER_SECTOR: u64 = BLOCK_SIZE / SECTOR_SIZE;
-// 128 sectors is the amount allocated for DISK_BIOS_ADDR
-// 127 sectors is the maximum for many BIOSes
+// 128 setores é a quantidade alocada para DISK_BIOS_ADDR
+// 127 setores é o máximo para muitas BIOSes
 const MAX_SECTORS: u64 = 127;
 const MAX_BLOCKS: u64 = MAX_SECTORS * SECTOR_SIZE / BLOCK_SIZE;
 
@@ -57,10 +57,10 @@ impl DiskBios {
             data.with(thunk13);
 
             if (data.ebx & 0xFFFF) == 0xAA55 {
-                // Extensions are installed, do not use CHS
+                // Extensões estão instaladas, não usar CHS
                 None
             } else {
-                // Extensions are not installed, get CHS geometry
+                // Extensões não estão instaladas, obter geometria CHS
                 data = ThunkData::new();
                 data.eax = 0x0800;
                 data.edx = boot_disk as u32;
@@ -68,7 +68,7 @@ impl DiskBios {
 
                 data.with(thunk13);
 
-                // TODO: return result on error
+                // TODO: retornar resultado em erro
                 let ah = ({ data.eax } >> 8) & 0xFF;
                 assert_eq!(ah, 0);
 
@@ -91,7 +91,7 @@ impl DiskBios {
 impl Disk for DiskBios {
     unsafe fn read_at(&mut self, block: u64, buffer: &mut [u8]) -> Result<usize> {
         unsafe {
-            // Optimization for live disks
+            // Otimização para discos live
             if let Some(live) = crate::LIVE_OPT {
                 if block >= live.0 {
                     let start = ((block - live.0) * BLOCK_SIZE) as usize;
@@ -133,7 +133,7 @@ impl Disk for DiskBios {
 
                     data.with(self.thunk13);
 
-                    // TODO: return result on error
+                    // TODO: retornar resultado em erro
                     let ah = ({ data.eax } >> 8) & 0xFF;
                     assert_eq!(ah, 0);
                 } else {
@@ -146,11 +146,11 @@ impl Disk for DiskBios {
 
                     data.with(self.thunk13);
 
-                    // TODO: return result on error
+                    // TODO: retornar resultado em erro
                     let ah = ({ data.eax } >> 8) & 0xFF;
                     assert_eq!(ah, 0);
 
-                    // TODO: check blocks transferred
+                    // TODO: checar blocos transferidos
                     // dap = ptr::read(DISK_ADDRESS_PACKET_ADDR as *mut
                     // DiskAddressPacket);
                 }

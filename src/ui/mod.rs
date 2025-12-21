@@ -1,6 +1,6 @@
-//! User Interface System
+//! Sistema de Interface de Usuário
 //!
-//! Interactive boot menu, terminal, and graphics
+//! Menu de boot interativo, terminal e gráficos
 
 pub mod editor;
 pub mod input;

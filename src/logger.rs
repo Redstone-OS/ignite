@@ -1,7 +1,12 @@
 use log::{LevelFilter, Log, Metadata, Record};
 
+//! Logger Simples
+//!
+//! Implementação básica de logging para o bootloader.
+
 pub static LOGGER: Logger = Logger;
 
+/// Estrutura do Logger
 pub struct Logger;
 
 impl Logger {

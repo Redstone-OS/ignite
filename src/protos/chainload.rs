@@ -1,7 +1,6 @@
-//! Chainloading Support
+//! Suporte a Chainloading
 //!
-//! Allows boot loading another bootloader (EFI applications or BIOS boot
-//! sectors).
+//! Permite carregar outro bootloader (aplicações EFI ou setores de boot BIOS).
 
 use log::info;
 
@@ -12,7 +11,7 @@ use crate::{
     types::LoadedFile,
 };
 
-/// EFI chainload protocol
+/// Protocolo de chainload EFI
 pub struct EfiChainloadProtocol<'a> {
     allocator:   &'a MemoryAllocator<'a>,
     entry_point: u64,
@@ -26,13 +25,13 @@ impl<'a> EfiChainloadProtocol<'a> {
         }
     }
 
-    /// Validate PE/COFF header
+    /// Validar cabeçalho PE/COFF
     fn validate_pe(&self, image: &[u8]) -> Result<()> {
         if image.len() < 64 {
             return Err(BootError::Generic("Image too small"));
         }
 
-        // Check DOS header magic "MZ"
+        // Checar magic do cabeçalho DOS "MZ"
         if &image[0..2] != b"MZ" {
             return Err(BootError::Generic("Invalid PE/COFF magic"));
         }
@@ -53,9 +52,9 @@ impl<'a> BootProtocol for EfiChainloadProtocol<'a> {
         _cmdline: Option<&str>,
         _modules: &[LoadedFile],
     ) -> Result<BootInfo> {
-        // Load PE/COFF image
-        // TODO: Parse PE headers and relocate image
-        // For now, just load it into memory
+        // Carregar imagem PE/COFF
+        // TODO: Analisar cabeçalhos PE e realocar imagem
+        // Por enquanto, apenas carregar na memória
 
         let pages = (image.len() + 4095) / 4096;
         let load_addr = self.allocator.allocate_any(pages)?;
@@ -64,8 +63,8 @@ impl<'a> BootProtocol for EfiChainloadProtocol<'a> {
             core::ptr::copy_nonoverlapping(image.as_ptr(), load_addr as *mut u8, image.len());
         }
 
-        // TODO: Parse PE to find entry point
-        // For now, assume entry at start
+        // TODO: Analisar PE para encontrar ponto de entrada
+        // Por enquanto, assumir entrada no início
         self.entry_point = load_addr;
 
         info!("EFI chainload loaded at {:#x}", load_addr);
@@ -89,10 +88,10 @@ impl<'a> BootProtocol for EfiChainloadProtocol<'a> {
     }
 }
 
-/// BIOS chainload protocol
+/// Protocolo de chainload BIOS
 pub struct BiosChainloadProtocol {
-    // BIOS chainloading is platform-specific and would only work on BIOS systems
-    // This is a placeholder for when BIOS support is added
+    // Chainloading BIOS é específico de plataforma e funcionaria apenas em sistemas BIOS
+    // Este é um placeholder para quando o suporte a BIOS for adicionado
 }
 
 impl BiosChainloadProtocol {
@@ -101,8 +100,8 @@ impl BiosChainloadProtocol {
     }
 }
 
-// Note: This won't compile on UEFI-only builds, which is intentional
+// Nota: Isso não compilará em builds apenas UEFI, o que é intencional
 // #[cfg(target_os = "bios")]
 // impl BootProtocol for BiosChainloadProtocol {
-//     // Implementation for BIOS chainloading
+//     // Implementação para chainloading BIOS
 // }

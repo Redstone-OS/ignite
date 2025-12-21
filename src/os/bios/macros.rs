@@ -1,4 +1,4 @@
-/// Print to console
+/// Imprimir para o console
 #[macro_export]
 macro_rules! print {
     ($($arg:tt)*) => ({
@@ -11,7 +11,7 @@ macro_rules! print {
     });
 }
 
-/// Print with new line to console
+/// Imprimir com nova linha para o console
 #[macro_export]
 macro_rules! println {
     () => (print!("\n"));

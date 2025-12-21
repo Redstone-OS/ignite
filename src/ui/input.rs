@@ -1,8 +1,8 @@
-//! Input Handling
+//! Manipulação de Entrada
 //!
-//! Keyboard and mouse input processing
+//! Processamento de entrada de teclado e mouse
 
-/// Key codes
+/// Códigos de tecla
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub enum Key {
     Up,
@@ -26,7 +26,7 @@ pub enum Key {
     F12,
 }
 
-/// Input handler
+/// Manipulador de entrada
 pub struct InputHandler;
 
 impl InputHandler {
@@ -34,16 +34,16 @@ impl InputHandler {
         Self
     }
 
-    /// Wait for key press (blocking)
+    /// Aguardar pressionamento de tecla (bloqueante)
     pub fn wait_key(&self) -> Option<Key> {
-        // TODO: Implement actual key reading from UEFI
-        // For now, return None
+        // TODO: Implementar leitura real de tecla da UEFI
+        // Por enquanto, retorna None
         None
     }
 
-    /// Check if key is available (non-blocking)
+    /// Verificar se há tecla disponível (não bloqueante)
     pub fn key_available(&self) -> bool {
-        // TODO: Implement
+        // TODO: Implementar
         false
     }
 }

@@ -1,10 +1,10 @@
-//! ACPI Table Support
+//! Suporte a Tabelas ACPI
 //!
-//! Locate and parse ACPI tables (RSDP, RSDT, XSDT)
+//! Localiza e parseia tabelas ACPI (RSDP, RSDT, XSDT)
 
 use core::mem;
 
-/// RSDP (Root System Description Pointer) structure
+/// Estrutura RSDP (Root System Description Pointer)
 #[repr(C, packed)]
 #[derive(Debug, Copy, Clone)]
 pub struct Rsdp {
@@ -15,7 +15,7 @@ pub struct Rsdp {
     pub rsdt_address: u32,
 }
 
-/// Extended RSDP for ACPI 2.0+
+/// RSDP Estendido para ACPI 2.0+
 #[repr(C, packed)]
 #[derive(Debug, Copy, Clone)]
 pub struct RsdpExtended {
@@ -26,7 +26,7 @@ pub struct RsdpExtended {
     pub reserved:          [u8; 3],
 }
 
-/// ACPI SDT Header
+/// Cabeçalho ACPI SDT
 #[repr(C, packed)]
 #[derive(Debug, Copy, Clone)]
 pub struct SdtHeader {
@@ -41,30 +41,30 @@ pub struct SdtHeader {
     pub creator_revision: u32,
 }
 
-/// ACPI manager
+/// Gerenciador ACPI
 pub struct AcpiManager {
     rsdp_addr: u64,
 }
 
 impl AcpiManager {
-    /// Find RSDP in memory
+    /// Encontrar RSDP na memória
     pub fn find_rsdp() -> Option<u64> {
-        // TODO: Search for RSDP in EBDA and BIOS areas
-        // On UEFI, get from EFI System Table
+        // TODO: Buscar RSDP em EBDA e áreas da BIOS
+        // Em UEFI, obter da Tabela de Sistema EFI
         None
     }
 
-    /// Create ACPI manager from RSDP address
+    /// Criar gerenciador ACPI a partir do endereço RSDP
     pub fn new(rsdp_addr: u64) -> Self {
         Self { rsdp_addr }
     }
 
-    /// Get RSDP
+    /// Obter RSDP
     pub fn get_rsdp(&self) -> &Rsdp {
         unsafe { &*(self.rsdp_addr as *const Rsdp) }
     }
 
-    /// Validate RSDP checksum
+    /// Validar checksum do RSDP
     pub fn validate_rsdp(&self) -> bool {
         let rsdp = self.get_rsdp();
         let bytes = unsafe {
@@ -75,16 +75,16 @@ impl AcpiManager {
         sum == 0
     }
 
-    /// Get RSDT/XSDT address
+    /// Obter endereço RSDT/XSDT
     pub fn get_sdt_address(&self) -> u64 {
         let rsdp = self.get_rsdp();
 
         if rsdp.revision >= 2 {
-            // ACPI 2.0+, use XSDT
+            // ACPI 2.0+, usar XSDT
             let extended = unsafe { &*(self.rsdp_addr as *const RsdpExtended) };
             extended.xsdt_address
         } else {
-            // ACPI 1.0, use RSDT
+            // ACPI 1.0, usar RSDT
             rsdp.rsdt_address as u64
         }
     }

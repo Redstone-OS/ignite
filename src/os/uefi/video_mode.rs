@@ -22,11 +22,11 @@ impl Iterator for VideoModeIter {
         if let Some(ref mut output) = self.output_opt {
             let st = uefi_services::system_table();
             let bs = st.boot_services();
-            // output.0 is GraphicsOutput. modes() takes &BootServices.
-            // Check signature.
-            // We need to advance to self.i
-            // Since mode iterator consumes, we reconstruct it every time? Inefficient but
-            // safe. Or just use nth(self.i).
+            // output.0 é GraphicsOutput. modes() aceita &BootServices.
+            // Checar assinatura.
+            // Precisamos avançar para self.i
+            // Já que o iterador de modo consome, reconstruímos ele toda vez? Ineficiente mas
+            // seguro. Ou apenas usar nth(self.i).
 
             if let Some(mode) = output.0.modes().nth(self.i) {
                 let info = mode.info();
@@ -34,7 +34,7 @@ impl Iterator for VideoModeIter {
                 self.i += 1;
 
                 return Some(OsVideoMode {
-                    id:     id as u32, // ID should be index
+                    id:     id as u32, // ID deve ser o índice
                     width:  info.resolution().0 as u32,
                     height: info.resolution().1 as u32,
                     stride: info.stride() as u32,

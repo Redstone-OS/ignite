@@ -1,13 +1,13 @@
 use core::marker::PhantomData;
 
-/// IO trait for generic read/write
+/// Trait de IO para leitura/escrita genérica
 pub trait Io {
     type Value: Copy + PartialEq + core::fmt::Debug;
     fn read(&self) -> Self::Value;
     fn write(&mut self, value: Self::Value);
 }
 
-/// Read-only wrapper
+/// Wrapper Apenas-Leitura
 pub struct ReadOnly<T> {
     inner: T,
 }
@@ -26,11 +26,12 @@ impl<T: Io> Io for ReadOnly<T> {
     }
 
     fn write(&mut self, _value: T::Value) {
-        // No-op or panic
+        // No-op ou panic
+        // No-op ou pânico
     }
 }
 
-/// Port I/O for x86
+/// Port I/O para x86
 #[derive(Clone, Copy)]
 pub struct Pio<T> {
     port:     u16,
@@ -64,7 +65,7 @@ impl Io for Pio<u8> {
     }
 }
 
-// Minimal MMIO implementation if needed
+// Implementação mínima de MMIO se necessário
 pub struct Mmio<T> {
     addr:     usize,
     _phantom: PhantomData<T>,

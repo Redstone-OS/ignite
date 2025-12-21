@@ -1,6 +1,6 @@
-//! Configuration Editor
+//! Editor de Configuração
 //!
-//! In-bootloader configuration editor
+//! Editor de configuração integrado ao bootloader
 
 use alloc::string::String;
 
@@ -17,12 +17,12 @@ impl ConfigEditor {
         }
     }
 
-    /// Edit configuration interactively
+    /// Editar configuração interativamente
     pub fn edit(&mut self) -> Option<String> {
-        // TODO: Implement interactive editor
-        // - Syntax highlighting
-        // - Navigation
-        // - Validation
+        // TODO: Implementar editor interativo
+        // - Highlight de sintaxe
+        // - Navegação
+        // - Validação
 
         Some(self.buffer.clone())
     }
