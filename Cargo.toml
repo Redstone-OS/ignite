@@ -12,3 +12,4 @@ goblin = { version = "0.8", default-features = false, features = [
     "elf64",
     "endian_fd",
 ] }
+bitflags = "2.4"
