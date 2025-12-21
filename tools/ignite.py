@@ -38,13 +38,12 @@ LOG_DIR = Path(__file__).parent / "log"  # tools/log/
 # Criar diretório de logs
 LOG_DIR.mkdir(exist_ok=True)
 
-# Configurar logging
+# Configurar logging - APENAS para arquivo, sem output na tela
 log_file = LOG_DIR / f"ignite_{datetime.now().strftime('%Y%m%d_%H%M%S')}.log"
 logging.basicConfig(
     level=logging.DEBUG,
     format="%(asctime)s [%(levelname)s] %(message)s",
     handlers=[
-        RichHandler(console=console, rich_tracebacks=True, show_time=False),
         logging.FileHandler(log_file, encoding='utf-8')
     ]
 )
@@ -77,11 +76,12 @@ def show_header():
     console.print(header)
 
 def run_with_progress(cmd, description, cwd=None, show_output=True):
-    """Executa comando mostrando output em tempo real E salvando em log"""
+    """Executa comando mostrando output limpo E salvando em log"""
     logger.info(f"Executando: {' '.join(cmd)}")
     logger.info(f"={'='*60}")
     
-    console.print(f"\n[cyan]▶ {description}...[/cyan]\n")
+    console.print(f"\n[cyan]▶ {description}...[/cyan]")
+    console.print("[dim]" + "-"*60 + "[/dim]\n")
     
     try:
         # Executar mostrando output em tempo real
@@ -95,36 +95,67 @@ def run_with_progress(cmd, description, cwd=None, show_output=True):
         )
         
         output_lines = []
+        error_count = 0
+        warning_count = 0
         
-        # Ler e mostrar output em tempo real
+        # Ler e processar output
         for line in iter(process.stdout.readline, ''):
             if not line:
                 break
             output_lines.append(line)
-            # Mostrar na tela
-            if show_output:
-                console.print(f"[dim]{line.rstrip()}[/dim]")
-            # Salvar em log
+            
+            # Salvar TUDO em log
             logger.info(f"  {line.rstrip()}")
+            
+            # Mostrar na tela de forma SELETIVA
+            line_lower = line.lower()
+            
+            # Contar erros e warnings
+            if 'error[' in line_lower or 'error:' in line_lower:
+                error_count += 1
+            if 'warning[' in line_lower or 'warning:' in line_lower:
+                warning_count += 1
+            
+            if show_output:
+                # Mostrar linhas importantes
+                if any(keyword in line_lower for keyword in ['compiling', 'finished', 'error', 'warning', 'failed']):
+                    # Colorir por tipo
+                    if 'error' in line_lower:
+                        console.print(f"[red]{line.rstrip()}[/red]")
+                    elif 'warning' in line_lower:
+                        console.print(f"[yellow]{line.rstrip()}[/yellow]")
+                    elif 'compiling' in line_lower:
+                        console.print(f"[cyan]{line.rstrip()}[/cyan]")
+                    elif 'finished' in line_lower:
+                        console.print(f"[green]{line.rstrip()}[/green]")
+                    else:
+                        console.print(f"[dim]{line.rstrip()}[/dim]")
         
         process.wait()
         returncode = process.returncode
         output = ''.join(output_lines)
         
+        # Resumo visual
+        console.print("\n[dim]" + "-"*60 + "[/dim]")
+        
         if returncode == 0:
-            console.print(f"\n✓ [green]{description} concluído![/green]")
+            console.print(f"[bold green]✓ {description} concluído com sucesso![/bold green]")
             logger.info(f"{description} - Sucesso (exit code: 0)")
-            logger.info(f"={'='*60}")
-            return True, output
         else:
-            console.print(f"\n✗ [red]{description} falhou! (exit code: {returncode})[/red]")
+            console.print(f"[bold red]✗ {description} falhou![/bold red]")
+            if error_count > 0:
+                console.print(f"[red]  {error_count} erro(s) encontrado(s)[/red]")
+            if warning_count > 0:
+                console.print(f"[yellow]  {warning_count} warning(s) encontrado(s)[/yellow]")
+            console.print(f"[dim]  Veja detalhes completos em: {log_file.name}[/dim]")
             logger.error(f"{description} - Falha (exit code: {returncode})")
-            logger.info(f"={'='*60}")
             stats["errors"] += 1
-            return False, output
+        
+        logger.info(f"={'='*60}")
+        return returncode == 0, output
     
     except Exception as e:
-        console.print(f"✗ [red]Erro: {e}[/red]")
+        console.print(f"[bold red]✗ Erro: {e}[/bold red]")
         logger.exception(f"Exceção durante {description}")
         logger.info(f"={'='*60}")
         stats["errors"] += 1
@@ -452,37 +483,34 @@ def show_menu():
     
     # Coluna 1: Build & Testes
     col1 = Table(show_header=True, header_style="bold yellow on blue", border_style="blue", box=box.ROUNDED, padding=(0, 1), expand=True)
-    col1.add_column("", style="bold cyan", width=3, justify="right")
+    col1.add_column("", style="bold cyan", width=2, justify="right")
     col1.add_column("Build & Testes", style="white", no_wrap=False)
     col1.add_row("1", "Build Debug")
     col1.add_row("2", "Build Release")
     col1.add_row("3", "Build Verbose")
-    col1.add_row("", "")
     col1.add_row("4", "Todos Testes")
     col1.add_row("5", "Testes Unit")
     col1.add_row("6", "Testes Integration")
     
     # Coluna 2: Check & Dist
     col2 = Table(show_header=True, header_style="bold yellow on magenta", border_style="magenta", box=box.ROUNDED, padding=(0, 1), expand=True)
-    col2.add_column("", style="bold cyan", width=3, justify="right")
+    col2.add_column("", style="bold cyan", width=2, justify="right")
     col2.add_column("Check & Dist", style="white", no_wrap=False)
     col2.add_row("7", "Cargo Check")
     col2.add_row("8", "Rustfmt Check")
     col2.add_row("9", "Clippy Lints")
     col2.add_row("10", "Check Completo")
-    col2.add_row("", "")
     col2.add_row("11", "Dist Release")
     col2.add_row("12", "Dist Debug")
     
     # Coluna 3: Utilidades
     col3 = Table(show_header=True, header_style="bold yellow on green", border_style="green", box=box.ROUNDED, padding=(0, 1), expand=True)
-    col3.add_column("", style="bold cyan", width=3, justify="right")
+    col3.add_column("", style="bold cyan", width=2, justify="right")
     col3.add_column("Utilidades", style="white", no_wrap=False)
     col3.add_row("13", "Clean target/")
     col3.add_row("14", "Clean All")
     col3.add_row("15", "Doctor")
     col3.add_row("16", "Ver Logs")
-    col3.add_row("", "")
     col3.add_row("", "")
     col3.add_row("Q", "Sair")
     
@@ -495,7 +523,7 @@ def show_menu():
     
     console.print("\n")
     console.print(grid)
-    console.print(f"\n[dim]💡 Digite o número | Logs: [cyan]log/[/cyan] | Docs: [cyan]tools/README.md[/cyan][/dim]\n")
+    console.print(f"\n[dim]💡 Digite o número | Logs: [cyan]tools/log/[/cyan] | Docs: [cyan]tools/README.md[/cyan][/dim]\n")
 
 def show_logs():
     """Mostra logs recentes"""
