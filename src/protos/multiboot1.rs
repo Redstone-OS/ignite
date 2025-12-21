@@ -1,5 +1,3 @@
-#![allow(unaligned_references)]
-
 //! Implementação do Protocolo de Boot Multiboot 1
 //!
 //! Implementa a especificação Multiboot 1 para carregamento de kernels.
@@ -200,7 +198,7 @@ impl<'a> Multiboot1Protocol<'a> {
     }
 
     /// Criar estrutura de informação Multiboot 1
-    fn create_mbi(&self, cmdline: Option<&str>, modules: &[LoadedFile]) -> Result<u64> {
+    fn create_mbi(&self, cmdline: Option<&str>, _modules: &[LoadedFile]) -> Result<u64> {
         // Alocar memória para MBI
         let mbi_ptr = self.allocator.allocate_any(1)?;
         let mbi = unsafe { &mut *(mbi_ptr as *mut Multiboot1Info) };

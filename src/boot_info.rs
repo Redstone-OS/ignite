@@ -3,8 +3,6 @@
 //! Estrutura compartilhada entre bootloader e kernel.
 //! Contém informações sobre hardware e recursos disponíveis.
 
-#![no_std]
-
 /// Informações de boot passadas do bootloader para o kernel
 ///
 /// Esta estrutura é escrita pelo bootloader em um endereço fixo (0x8000)

@@ -50,22 +50,22 @@ unsafe extern "C" fn kernel_entry(
     }
 }
 
-pub fn main(st: &'static uefi::table::SystemTable<uefi::table::Boot>) -> Result<()> {
+pub fn main() -> Result<()> {
     crate::logger::LOGGER.init();
 
-    let mut os = OsEfi::new(st);
+    let mut os = OsEfi::new();
 
     // Disable cursor
     let _ = os
         .st
         .boot_services()
-        .set_image_handle(os.st.boot_services().image_handle()); // Wait?
+        .set_image_handle(crate::os::uefi::image_handle());
     // os.st is SystemTable. stdout() is available.
-    if let Some(mut output) = os.st.stdout().as_mut() {
+    if let Some(output) = os.st.stdout() {
         let _ = output.enable_cursor(false);
     }
 
-    let (page_phys, func, args) = crate::main(&mut os);
+    let (page_phys, func, args) = crate::ignite_main(&mut os);
 
     unsafe {
         kernel_entry(

@@ -2,8 +2,6 @@
 //!
 //! Menu interativo para seleção de entradas de boot
 
-use alloc::vec::Vec;
-
 use log::info;
 
 use crate::{

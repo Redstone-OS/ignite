@@ -8,8 +8,6 @@
 //! - Multiboot 2
 //! - Chainloading EFI/BIOS
 
-use alloc::vec::Vec;
-
 use crate::{error::Result, types::LoadedFile};
 
 pub mod chainload;

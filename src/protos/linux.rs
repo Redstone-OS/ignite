@@ -1,5 +1,3 @@
-#![allow(unaligned_references)]
-
 //! Implementação do Protocolo de Boot Linux
 //!
 //! Implementa o protocolo de boot Linux x86/x86_64 para carregar kernels Linux.

@@ -50,11 +50,10 @@ use crate::types::KernelArgs;
 // use crate::ui::BootMenu; // TODO: Debug
 use crate::video::{GopVideoOutput, VideoOutput};
 use crate::{
-    elf::ElfLoader,
     error::Result,
-    fs::{FileLoader, InitFsLoader},
+    fs::FileLoader,
     memory::MemoryAllocator,
-    recovery::{BootOptions, Diagnostics, KeyDetector},
+    recovery::{Diagnostics, KeyDetector},
 };
 
 /// Função principal do bootloader
@@ -490,7 +489,7 @@ fn prepare_kernel_args_from_boot_info(
     allocator: &MemoryAllocator,
     boot_info: &protos::BootInfo,
     modules: &[types::LoadedFile],
-    framebuffer: &types::Framebuffer,
+    _framebuffer: &types::Framebuffer,
 ) -> Result<*const KernelArgs> {
     // Alocar memória para KernelArgs
     let args_ptr = allocator.allocate_any(1)?;
@@ -521,6 +520,7 @@ fn prepare_kernel_args_from_boot_info(
 }
 
 /// Prepara a estrutura KernelArgs
+#[allow(dead_code)]
 fn prepare_kernel_args(
     allocator: &MemoryAllocator,
     loaded_kernel: &types::LoadedKernel,

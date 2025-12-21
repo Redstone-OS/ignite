@@ -9,7 +9,7 @@ use alloc::{
 };
 
 use super::types::BootConfig;
-use crate::error::{BootError, Result};
+use crate::error::Result;
 
 /// Erro de validação
 #[derive(Debug)]

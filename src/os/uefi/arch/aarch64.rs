@@ -1,13 +1,13 @@
 use core::{arch::asm, fmt::Write, mem, slice};
+
 use uefi::status::Result;
 
+use super::super::{OsEfi, memory_map::memory_map};
 use crate::{
     KernelArgs,
     arch::{ENTRY_ADDRESS_MASK, PAGE_ENTRIES, PF_PRESENT, PF_TABLE, PHYS_OFFSET},
     logger::LOGGER,
 };
-
-use super::super::{OsEfi, memory_map::memory_map};
 
 unsafe fn dump_page_tables(table_phys: u64, table_virt: u64, table_level: u64) {
     unsafe {
@@ -122,7 +122,7 @@ unsafe extern "C" fn kernel_entry(
         } else if currentel == (1 << 2) {
             // Already in EL1
         } else {
-            //TODO: what to do if not EL2 or already EL1?
+            // TODO: what to do if not EL2 or already EL1?
             loop {
                 asm!("wfi");
             }
@@ -139,13 +139,16 @@ unsafe extern "C" fn kernel_entry(
 
         // Set MAIR
         // You can think about MAIRs as of an array with 8 elements each of 8 bits long.
-        // You can store inside MAIRs up to 8 attributes sets and reffer them by the index 0..7 stored in INDX (AttrIndx) field of the table descriptor.
-        // https://lowenware.com/blog/aarch64-mmu-programming/
+        // You can store inside MAIRs up to 8 attributes sets and reffer them by the
+        // index 0..7 stored in INDX (AttrIndx) field of the table descriptor. https://lowenware.com/blog/aarch64-mmu-programming/
         // https://developer.arm.com/documentation/102376/0200/Describing-memory-in-AArch64
         // https://developer.arm.com/documentation/ddi0595/2021-06/AArch64-Registers/MAIR-EL1--Memory-Attribute-Indirection-Register--EL1-
         // Attribute 0 (0xFF) - normal memory, caches are enabled
-        // Attribute 1 (0x44) - normal memory, caches are disabled. Atomics wouldn't work here if memory doesn't support exclusive access (most real hardware don't)
-        // Attribute 2 (0x00) - nGnRnE device memory, caches are disabled, gathering, re-ordering, and early write acknowledgement aren't allowed.
+        // Attribute 1 (0x44) - normal memory, caches are disabled. Atomics wouldn't
+        // work here if memory doesn't support exclusive access (most real hardware
+        // don't) Attribute 2 (0x00) - nGnRnE device memory, caches are
+        // disabled, gathering, re-ordering, and early write acknowledgement aren't
+        // allowed.
         asm!(
             "msr mair_el1, {0}",
             in(reg) 0x00000000000044FF as u64, // MAIR: Arrange for Device, Normal Non-Cache, Normal Write-Back access types
@@ -201,7 +204,9 @@ pub fn main() -> Result<()> {
     let mut os = OsEfi::new();
 
     // Disable cursor
-    let _ = (os.st.ConsoleOut.EnableCursor)(os.st.ConsoleOut, false);
+    if let Some(output) = os.st.stdout() {
+        let _ = output.enable_cursor(false);
+    }
 
     let currentel: u64;
     unsafe {
@@ -212,7 +217,7 @@ pub fn main() -> Result<()> {
     }
     log::info!("Currently in EL{}", (currentel >> 2) & 3);
 
-    let (page_phys, func, args) = crate::main(&mut os);
+    let (page_phys, func, args) = crate::ignite_main(&mut os);
 
     unsafe {
         let stack = args.stack_base + args.stack_size + PHYS_OFFSET;

@@ -13,3 +13,4 @@ goblin = { version = "0.8", default-features = false, features = [
     "endian_fd",
 ] }
 bitflags = "2.4"
+syscall = { path = "../libs/syscall" }

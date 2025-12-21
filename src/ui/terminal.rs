@@ -2,8 +2,6 @@
 //!
 //! Renderização de texto no framebuffer
 
-use alloc::vec::Vec;
-
 /// Terminal gráfico para renderização de texto
 pub struct GraphicalTerminal {
     width:       u32,

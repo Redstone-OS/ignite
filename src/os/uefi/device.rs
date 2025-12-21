@@ -8,7 +8,14 @@ use uefi::{
         DevicePathHardwareType, DevicePathMediaType, DevicePathMessagingType, DevicePathType,
     },
     guid::Guid,
-    proto::{Protocol, loaded_image::LoadedImage, media::fs::SimpleFileSystem},
+    proto::{
+        Protocol,
+        loaded_image::LoadedImage,
+        media::{
+            file::{File, FileAttribute, FileMode, FileType},
+            fs::SimpleFileSystem,
+        },
+    },
 };
 use uefi_services::println;
 
@@ -80,7 +87,7 @@ fn esp_live_image(esp_handle: Handle, esp_device_path: &DevicePath) -> Option<Ve
         },
     };
 
-    let mut root = match esp_fs.root() {
+    let mut root = match esp_fs.open_volume() {
         Ok(root) => root,
         Err(err) => {
             log::warn!("Failed to open ESP filesystem: {:?}", err);
@@ -98,8 +105,9 @@ fn esp_live_image(esp_handle: Handle, esp_device_path: &DevicePath) -> Option<Ve
         ret
     }
 
-    let filename = const { &as_utf16_str(*b"redstone-live.iso\0") };
-    let mut live_image = match root.open(filename) {
+    let filename_u16 = const { &as_utf16_str(*b"redstone-live.iso\0") };
+    let filename = uefi::CStr16::from_u16_with_nul(filename_u16).unwrap();
+    let mut live_image = match root.open(filename, FileMode::Read, FileAttribute::empty()) {
         Ok(live_image) => live_image,
         Err(Status::NOT_FOUND) => return None,
         Err(err) => {
@@ -153,12 +161,13 @@ pub fn disk_device_priority() -> Vec<DiskDevice> {
     };
 
     if cfg!(feature = "live") {
-        // Primeiro tentar obter uma imagem live de redstone-live.iso. Isso é necessário para
-        // suportar netbooting.
+        // Primeiro tentar obter uma imagem live de redstone-live.iso. Isso é necessário
+        // para suportar netbooting.
         if let Some(buffer) = esp_live_image(esp_handle, esp_device_path.0) {
             return vec![DiskDevice {
                 handle:           esp_handle.expect("ESP Handle missing"),
-                // Suportar tanto uma cópia de livedisk.iso quanto uma partição redstonefs independente
+                // Suportar tanto uma cópia de livedisk.iso quanto uma partição redstonefs
+                // independente
                 partition_offset: if &buffer[512..520] == b"EFI PART" {
                     // TODO: obter bloco da tabela de partição
                     2 * crate::MIBI as u64
@@ -172,8 +181,8 @@ pub fn disk_device_priority() -> Vec<DiskDevice> {
         }
     }
 
-    // Obter todos os handles de E/S de bloco junto com suas implementações de E/S de bloco e
-    // caminhos de dispositivo
+    // Obter todos os handles de E/S de bloco junto com suas implementações de E/S
+    // de bloco e caminhos de dispositivo
     let handles = match DiskEfi::locate_handle() {
         Ok(ok) => ok,
         Err(err) => {
@@ -487,8 +496,8 @@ unsafe impl Identify for DevicePathProtocol {
     const GUID: Guid = uefi::proto::device_path::DevicePath::GUID;
 }
 // Remover impl Protocol para wrapper se desnecessário, ou implementar vazio se
-// Identify estiver presente Mas usamos get_protocol::<DevicePathProtocol> em mod.rs?
-// Não, mod.rs usa get_protocol::<GraphicsOutput>.
+// Identify estiver presente Mas usamos get_protocol::<DevicePathProtocol> em
+// mod.rs? Não, mod.rs usa get_protocol::<GraphicsOutput>.
 // Em device.rs, usamos DevicePathProtocol::handle_protocol?
 // Devemos substituir com get_protocol::<DevicePath>.
 
@@ -496,10 +505,7 @@ impl Protocol for DevicePathProtocol {}
 
 pub struct LoadedImageDevicePathProtocol(pub &'static mut DevicePath);
 
-pub(crate) fn get_protocol<P: Protocol>(handle: Handle) -> uefi::Result<&'static mut P> {
-// ...
-// In LoadedImageDevicePathProtocol impl
-unsafe impl Identify for LoadedImageDevicePathProtocol {
+unsafe impl uefi::proto::Identify for LoadedImageDevicePathProtocol {
     const GUID: Guid = uefi::proto::device_path::DevicePath::GUID;
 }
 

@@ -74,25 +74,32 @@ pub(crate) fn find_acpi_table_pointers(os: &impl Os) -> Option<(u64, u64)> {
     for cfg_table in cfg_tables.iter() {
         if cfg_table.guid == ACPI_TABLE_GUID {
             match validate_rsdp(cfg_table.address, false) {
-                Ok(rsdp) => return Some(rsdp),
+                Ok(len) => {
+                    let s =
+                        unsafe { core::slice::from_raw_parts(cfg_table.address as *const u8, len) };
+                    acpi = Some(s);
+                },
                 Err(err) => {
                     let length = 36;
                     let bytes = unsafe {
                         core::slice::from_raw_parts(cfg_table.address as *const u8, length)
                     };
-                    println!("  Invalid ACPI 1.0 Table: {:?} - {:X?}", err, bytes);
+                    log::warn!("Invalid ACPI 1.0 Table: {:?} - {:X?}", err, bytes);
                 },
             }
         } else if cfg_table.guid == ACPI_20_TABLE_GUID {
             match validate_rsdp(cfg_table.address as usize, true) {
-                Ok(rsdp) => return Some(rsdp),
+                Ok(len) => {
+                    let s =
+                        unsafe { core::slice::from_raw_parts(cfg_table.address as *const u8, len) };
+                    acpi2 = Some(s);
+                },
                 Err(err) => {
                     let length = 36;
                     let bytes = unsafe {
                         core::slice::from_raw_parts(cfg_table.address as *const u8, length)
                     };
-                    println!("  Invalid ACPI 2.0 Table: {:?} - {:X?}", err, bytes);
-                    let ptr = unsafe { cfg_table.address as *const u8 };
+                    log::warn!("Invalid ACPI 2.0 Table: {:?} - {:X?}", err, bytes);
                 },
             }
         }

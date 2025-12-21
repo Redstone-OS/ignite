@@ -1,8 +1,9 @@
 use log::{LevelFilter, Log, Metadata, Record};
+use uefi_services::println;
 
-//! Logger Simples
-//!
-//! Implementação básica de logging para o bootloader.
+// Logger Simples
+//
+/// Implementação básica de logging para o bootloader.
 
 pub static LOGGER: Logger = Logger;
 

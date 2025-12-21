@@ -3,7 +3,6 @@
 //! Este módulo contém as definições e implementações para leitura do
 //! RedstoneFS.
 
-use alloc::vec::Vec;
 use core::marker::PhantomData;
 
 use crate::io::{Io, ReadOnly};

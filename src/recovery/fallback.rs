@@ -2,15 +2,13 @@
 //!
 //! Gerencia tentativas de boot e seleção de kernel
 
-use crate::error::Result;
-
 /// Entrada de kernel no sistema de boot
 #[derive(Debug, Clone)]
 pub struct KernelEntry {
     /// Caminho do arquivo do kernel
-    pub path: &'static str,
+    pub path:   &'static str,
     /// Nome amigável do kernel
-    pub name: &'static str,
+    pub name:   &'static str,
     /// Caminho do InitFS (opcional)
     pub initfs: Option<&'static str>,
 }
@@ -38,25 +36,25 @@ impl KernelEntry {
 /// Opções de boot com fallback
 pub struct BootOptions {
     /// Kernel principal (obrigatório)
-    pub primary_kernel: KernelEntry,
+    pub primary_kernel:  KernelEntry,
     /// Kernel de recuperação (opcional)
     /// TODO: Implementar kernel de recuperação dedicado
     pub recovery_kernel: Option<KernelEntry>,
     /// Contador de tentativas de boot
     /// TODO: Persistir este contador em variáveis UEFI
-    pub boot_attempts: u8,
+    pub boot_attempts:   u8,
     /// Máximo de tentativas antes de entrar em recovery
-    pub max_attempts: u8,
+    pub max_attempts:    u8,
 }
 
 impl BootOptions {
     /// Cria opções de boot padrão
     pub fn default() -> Self {
         Self {
-            primary_kernel: KernelEntry::new("forge", "Redstone OS"),
+            primary_kernel:  KernelEntry::new("forge", "Redstone OS"),
             recovery_kernel: None, // TODO: Adicionar kernel de recovery
-            boot_attempts: 0,
-            max_attempts: 3, // Estilo Windows: 3 tentativas
+            boot_attempts:   0,
+            max_attempts:    3, // Estilo Windows: 3 tentativas
         }
     }
 
@@ -82,7 +80,11 @@ impl BootOptions {
     /// TODO: Persistir em variável UEFI para sobreviver a reboots
     pub fn increment_attempts(&mut self) {
         self.boot_attempts += 1;
-        log::info!("Tentativa de boot: {}/{}", self.boot_attempts, self.max_attempts);
+        log::info!(
+            "Tentativa de boot: {}/{}",
+            self.boot_attempts,
+            self.max_attempts
+        );
     }
 
     /// Reseta contador após boot bem-sucedido

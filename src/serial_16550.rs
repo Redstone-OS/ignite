@@ -92,18 +92,20 @@ where
 
     fn line_sts(&self) -> LineStsFlags {
         LineStsFlags::from_bits_truncate(
-            (unsafe { &*addr_of!(self.line_sts) }.read() & 0xFF.into())
+            ((unsafe { &*addr_of!(self.line_sts) }.read())
                 .try_into()
-                .unwrap_or(0),
+                .unwrap_or(0))
+                & 0xFF,
         )
     }
 
     pub fn receive(&mut self) -> Option<u8> {
         if self.line_sts().contains(LineStsFlags::INPUT_FULL) {
             Some(
-                (unsafe { &*addr_of!(self.data) }.read() & 0xFF.into())
+                ((unsafe { &*addr_of!(self.data) }.read())
                     .try_into()
-                    .unwrap_or(0),
+                    .unwrap_or(0))
+                    & 0xFF,
             )
         } else {
             None

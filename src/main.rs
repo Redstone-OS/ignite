@@ -453,7 +453,7 @@ fn elf_entry(data: &[u8]) -> (u64, bool) {
     }
 }
 
-fn main(os: &impl Os) -> (usize, u64, KernelArgs) {
+fn ignite_main(os: &impl Os) -> (usize, u64, KernelArgs) {
     println!(
         "Redstone OS Bootloader {} on {}",
         env!("CARGO_PKG_VERSION"),

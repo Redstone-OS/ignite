@@ -7,10 +7,7 @@
 //! - guid(UUID):/path
 //! - fslabel(LABEL):/path
 
-use alloc::{
-    format,
-    string::{String, ToString},
-};
+use alloc::string::{String, ToString};
 use core::fmt;
 
 /// Tipo de recurso de caminho

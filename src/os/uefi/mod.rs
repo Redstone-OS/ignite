@@ -94,14 +94,15 @@ pub(crate) fn alloc_zeroed_page_aligned(size: usize) -> *mut u8 {
 }
 
 pub struct OsEfi {
-    pub st:  &'static SystemTable<uefi::table::Boot>,
+    pub st:  &'static mut SystemTable<uefi::table::Boot>,
     outputs: RefCell<Vec<(Output, Option<EdidActive>)>>,
 }
 
 use alloc::vec::Vec;
 
 impl OsEfi {
-    pub fn new(st: &'static SystemTable<uefi::table::Boot>) -> Self {
+    pub fn new() -> Self {
+        let st = uefi_services::system_table();
         let mut outputs = Vec::<(Output, Option<EdidActive>)>::new();
         {
             let guid = GraphicsOutput::GUID;
@@ -255,7 +256,7 @@ impl Os for OsEfi {
         // output.0 corresponde a GraphicsOutput
 
         // Se a struct Output envolve UnsafeCell<GraphicsOutput>
-        if let Some(mode_obj) = output.0.modes(st.boot_services()).nth(mode.id as usize) {
+        if let Some(mode_obj) = output.0.modes().nth(mode.id as usize) {
             match output.0.set_mode(&mode_obj) {
                 Ok(_) => {},
                 Err(e) => panic!("SetMode failed: {:?}", e),
