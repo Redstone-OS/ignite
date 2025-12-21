@@ -12,7 +12,7 @@ pub struct Logger;
 
 impl Logger {
     pub fn init(&'static self) {
-        log::set_logger(self).unwrap();
+        let _ = log::set_logger(self);
         log::set_max_level(LevelFilter::Info);
     }
 }

@@ -264,40 +264,51 @@ impl Os for OsEfi {
         // uefi 0.28: boot_services().wait_for_event(&[event])
         // stdin().wait_for_key_event() -> Event
 
-        let mut st = uefi_services::system_table();
-        let event = unsafe { st.stdin().wait_for_key_event().unwrap().unsafe_clone() };
-        let _ = st.boot_services().wait_for_event(&mut [event]).unwrap();
+        let mut st = unsafe { uefi::helpers::system_table() };
 
-        let key = match st.stdin().read_key() {
-            Ok(Some(k)) => k,
-            Ok(None) => return OsKey::Other, // Should wait
-            Err(_) => return OsKey::Other,
-        };
+        loop {
+            // Tenta ler
+            let (key, wait_event) = {
+                let stdin = st.stdin();
+                match stdin.read_key() {
+                    Ok(Some(k)) => (Some(k), None),
+                    Ok(None) | Err(_) => {
+                        // Wait for event
+                        let event = unsafe { stdin.wait_for_key_event().unwrap().unsafe_clone() };
+                        (None, Some(event))
+                    },
+                }
+            };
 
-        // Converter tecla para OsKey
-        // Baseado em uefi::proto::console::text::Key
-        match key {
-            TextInputKey::Printable(c) => {
-                let ch: char = c.into();
-                if ch == '\u{8}' {
-                    return OsKey::Backspace;
-                }
-                if ch == '\r' {
-                    return OsKey::Enter;
-                }
-                OsKey::Char(ch)
-            },
-            TextInputKey::Special(sc) => {
-                use uefi::proto::console::text::ScanCode;
-                match sc {
-                    ScanCode::UP => OsKey::Up,
-                    ScanCode::DOWN => OsKey::Down,
-                    ScanCode::RIGHT => OsKey::Right,
-                    ScanCode::LEFT => OsKey::Left,
-                    ScanCode::DELETE => OsKey::Delete,
-                    _ => OsKey::Other,
-                }
-            },
+            if let Some(key) = key {
+                return match key {
+                    TextInputKey::Printable(c) => {
+                        let ch: char = c.into();
+                        if ch == '\u{8}' {
+                            OsKey::Backspace
+                        } else if ch == '\r' {
+                            OsKey::Enter
+                        } else {
+                            OsKey::Char(ch)
+                        }
+                    },
+                    TextInputKey::Special(sc) => {
+                        use uefi::proto::console::text::ScanCode;
+                        match sc {
+                            ScanCode::UP => OsKey::Up,
+                            ScanCode::DOWN => OsKey::Down,
+                            ScanCode::RIGHT => OsKey::Right,
+                            ScanCode::LEFT => OsKey::Left,
+                            ScanCode::DELETE => OsKey::Delete,
+                            _ => OsKey::Other,
+                        }
+                    },
+                };
+            }
+
+            if let Some(event) = wait_event {
+                let _ = st.boot_services().wait_for_event(&mut [event]);
+            }
         }
     }
 
