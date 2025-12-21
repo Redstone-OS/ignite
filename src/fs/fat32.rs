@@ -6,7 +6,7 @@
 
 use alloc::{string::String, vec::Vec};
 
-use crate::error::{BootError, Result};
+use crate::core::error::{BootError, Result};
 
 /// BPB (Bios Parameter Block) para FAT
 #[repr(C, packed)]

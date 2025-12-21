@@ -26,25 +26,19 @@
 
 extern crate alloc;
 
-mod bump_allocator;
-
 // Global allocator - Static Bump Allocator (independente de UEFI boot services)
 #[global_allocator]
-static ALLOCATOR: bump_allocator::BumpAllocator = bump_allocator::BumpAllocator::new();
+static ALLOCATOR: memory::BumpAllocator = memory::BumpAllocator::new();
 
-pub mod boot_info;
 pub mod config;
-pub mod constants; // Constantes centralizadas
+pub mod core; // Core utilities: constants, types, error, boot_info, logger
 pub mod elf;
-pub mod error;
 pub mod fs;
-pub mod hardware;
-pub mod memory;
+pub mod hardware; // Hardware abstractions: acpi, fdt, io, serial
+pub mod memory; // Memory management: allocator, bump_allocator
 pub mod protos;
 pub mod recovery;
 pub mod security;
-pub mod serial; // Wrapper de serial configurável
-pub mod types;
 pub mod uefi; // Nossa implementação UEFI pura (sem dependências externas)
 pub mod ui;
 pub mod video;
@@ -54,11 +48,10 @@ use log::info;
 
 // use crate::security::{IntegrityChecker, RollbackProtection, SecureBootManager}; // TODO:
 // Debug
-use crate::types::KernelArgs;
+use crate::core::{error::Result, types::KernelArgs};
 // use crate::ui::BootMenu; // TODO: Debug
 use crate::video::{GopVideoOutput, VideoOutput};
 use crate::{
-    error::Result,
     fs::FileLoader,
     memory::MemoryAllocator,
     recovery::{Diagnostics, KeyDetector},
@@ -84,7 +77,7 @@ pub fn boot(image_handle: Handle, system_table: *mut SystemTable) -> ! {
     unsafe {
         let port: u16 = 0x3F8;
         for &byte in b"[1/20] Boot started\r\n" {
-            core::arch::asm!("out dx, al", in("dx") port, in("al") byte);
+            ::core::arch::asm!("out dx, al", in("dx") port, in("al") byte);
         }
     }
 
@@ -94,19 +87,19 @@ pub fn boot(image_handle: Handle, system_table: *mut SystemTable) -> ! {
     unsafe {
         let port: u16 = 0x3F8;
         for &byte in b"[2/20] UEFI init OK\r\n" {
-            core::arch::asm!("out dx, al", in("dx") port, in("al") byte);
+            ::core::arch::asm!("out dx, al", in("dx") port, in("al") byte);
         }
     }
 
     // CRÍTICO: Pré-alocar heap estática VIA UEFI allocate_pages
     // Isso garante que temos memória própria que sobrevive a exit_boot_services
-    let boot_services = system_table.boot_services();
-    let heap_pages = bump_allocator::HEAP_SIZE / 4096;
+    let boot_services = unsafe { &*(*system_table).boot_services };
+    let heap_pages = crate::memory::bump_allocator::HEAP_SIZE / 4096;
 
     unsafe {
         let port: u16 = 0x3F8;
         for &byte in b"[3/20] Allocating static heap...\r\n" {
-            core::arch::asm!("out dx, al", in("dx") port, in("al") byte);
+            ::core::arch::asm!("out dx, al", in("dx") port, in("al") byte);
         }
     }
 
@@ -127,7 +120,7 @@ pub fn boot(image_handle: Handle, system_table: *mut SystemTable) -> ! {
 
         let port: u16 = 0x3F8;
         for &byte in b"[4/20] Bump allocator initialized\r\n" {
-            core::arch::asm!("out dx, al", in("dx") port, in("al") byte);
+            ::core::arch::asm!("out dx, al", in("dx") port, in("al") byte);
         }
     }
 
@@ -189,7 +182,7 @@ pub fn boot(image_handle: Handle, system_table: *mut SystemTable) -> ! {
         .expect("Falha ao carregar kernel");
 
     let kernel_data =
-        unsafe { core::slice::from_raw_parts(kernel_file.ptr as *const u8, kernel_file.size) };
+        unsafe { ::core::slice::from_raw_parts(kernel_file.ptr as *const u8, kernel_file.size) };
 
     // 6. Carregar initramfs (ramdisk)
     info!("Etapa 5/7: Carregando initramfs...");
@@ -234,50 +227,54 @@ pub fn boot(image_handle: Handle, system_table: *mut SystemTable) -> ! {
     // Criar BootInfo com memory map REAL da UEFI
     let boot_info_ptr = allocator
         .allocate_any(1)
-        .expect("Failed to allocate BootInfo") as *mut boot_info::BootInfo;
+        .expect("Failed to allocate BootInfo")
+        as *mut crate::core::boot_info::BootInfo;
     let boot_info_addr = boot_info_ptr as u64;
 
     // Memory map vai logo após o BootInfo
-    const BOOT_INFO_SIZE: usize = core::mem::size_of::<boot_info::BootInfo>();
+    const BOOT_INFO_SIZE: usize = ::core::mem::size_of::<crate::core::boot_info::BootInfo>();
     let memory_map_addr = (boot_info_addr + BOOT_INFO_SIZE as u64) as usize;
     const MAX_REGIONS: usize = 256;
 
     // Obter memory map da UEFI usando nova API freestanding 0.31
-    let memory_map =
+    let _memory_map =
         // TODO: Implementar memorymap usando nossa camada UEFI
-        // let memory_map = ...; // uefi::boot::memory_map not implemented yet
+        // let _memory_map = ...; // uefi::boot::memory_map not implemented yet
         log::warn!("Memory map retrieval not yet implemented with pure UEFI");
 
     // Converter para nosso formato
-    let memory_regions = unsafe {
-        core::slice::from_raw_parts_mut(
-            memory_map_addr as *mut boot_info::MemoryRegion,
+    let _memory_regions = unsafe {
+        ::core::slice::from_raw_parts_mut(
+            memory_map_addr as *mut crate::core::boot_info::MemoryRegion,
             MAX_REGIONS,
         )
     };
 
     let mut region_count = 0;
-    for desc in memory_map.entries() {
+    /*for desc in memory_map.entries() {
         if region_count >= MAX_REGIONS {
             break;
         }
 
         let region_type = match desc.ty {
-            MemoryType::CONVENTIONAL => boot_info::MemoryRegionType::Usable,
-            MemoryType::ACPI_RECLAIM => boot_info::MemoryRegionType::AcpiReclaimable,
-            MemoryType::ACPI_NON_VOLATILE => boot_info::MemoryRegionType::AcpiNvs,
-            _ => boot_info::MemoryRegionType::Reserved,
+            MemoryType::CONVENTIONAL => crate::core::boot_info::MemoryRegionType::Usable,
+            MemoryType::ACPI_RECLAIM => crate::core::boot_info::MemoryRegionType::AcpiReclaimable,
+            MemoryType::ACPI_NON_VOLATILE => crate::core::boot_info::MemoryRegionType::AcpiNvs,
+            _ => crate::core::boot_info::MemoryRegionType::Reserved,
         };
 
-        memory_regions[region_count] =
-            boot_info::MemoryRegion::new(desc.phys_start, desc.page_count * 4096, region_type);
+        memory_regions[region_count] = crate::core::boot_info::MemoryRegion::new(
+            desc.phys_start,
+            desc.page_count * 4096,
+            region_type,
+        );
         region_count += 1;
-    }
+    }*/
 
     info!("Memory map: {} regions collected from UEFI", region_count);
 
     // Criar e escrever BootInfo UEFI
-    let uefi_boot_info = boot_info::BootInfo {
+    let uefi_boot_info = crate::core::boot_info::BootInfo {
         fb_addr:         framebuffer.ptr,
         fb_width:        framebuffer.horizontal_resolution as u32,
         fb_height:       framebuffer.vertical_resolution as u32,
@@ -308,9 +305,7 @@ pub fn boot(image_handle: Handle, system_table: *mut SystemTable) -> ! {
     );
 
     // 8. Desativar watchdog timer
-    boot_services
-        .set_watchdog_timer(0, 0x10000, None)
-        .unwrap_or(());
+    let _ = (boot_services.set_watchdog_timer)(0, 0x10000, 0, ::core::ptr::null());
 
     // 9. Logging final
     info!("═══════════════════════════════════════════════════");
@@ -343,7 +338,7 @@ pub fn boot(image_handle: Handle, system_table: *mut SystemTable) -> ! {
     unsafe {
         // Enviar byte 'J' para serial (0x3F8) para confirmar que passamos do
         // exit_boot_services
-        core::arch::asm!(
+        ::core::arch::asm!(
             "mov dx, 0x3F8",
             "mov al, 0x4A", // 'J'
             "out dx, al"
@@ -354,7 +349,7 @@ pub fn boot(image_handle: Handle, system_table: *mut SystemTable) -> ! {
         let boot_info_arg = boot_info_addr;
 
         // Enviar 'K' indicando que vamos saltar
-        core::arch::asm!(
+        ::core::arch::asm!(
             "mov dx, 0x3F8",
             "mov al, 0x4B", // 'K'
             "out dx, al"
@@ -370,7 +365,7 @@ pub fn boot(image_handle: Handle, system_table: *mut SystemTable) -> ! {
 /// seja exatamente como escrevemos, sem prólogo/epílogo do compilador
 #[unsafe(naked)]
 extern "C" fn jump_to_kernel_naked(entry: u64, boot_info: u64) -> ! {
-    core::arch::naked_asm!(
+    ::core::arch::naked_asm!(
         // SYSTEM V ABI (Linux/Bare Metal): RDI, RSI, RDX, RCX, R8, R9
         // MICROSOFT ABI (UEFI/Windows):    RCX, RDX, R8,  R9
 
@@ -409,11 +404,12 @@ fn load_config(file_loader: &mut FileLoader) -> config::types::BootConfig {
 
     // Tentar carregar ignite.conf
     if let Ok(config_file) = file_loader.load_file("ignite.conf") {
-        let config_data =
-            unsafe { core::slice::from_raw_parts(config_file.ptr as *const u8, config_file.size) };
+        let config_data = unsafe {
+            ::core::slice::from_raw_parts(config_file.ptr as *const u8, config_file.size)
+        };
 
         // Converter bytes para string
-        if let Ok(config_str) = core::str::from_utf8(config_data) {
+        if let Ok(config_str) = ::core::str::from_utf8(config_data) {
             info!(
                 "Arquivo ignite.conf encontrado ({} bytes)",
                 config_file.size
@@ -443,7 +439,7 @@ fn create_default_config() -> config::types::BootConfig {
 
     use config::types::{BootConfig, MenuEntry, WallpaperStyle};
 
-    use crate::constants::{boot::BOOT_DELAY_SECONDS, paths::*};
+    use crate::core::constants::{boot::BOOT_DELAY_SECONDS, paths::*};
 
     let mut config = BootConfig {
         timeout:              Some(3), // 3 segundos para permitir tecla M
@@ -528,8 +524,8 @@ fn select_boot_entry(boot_services: &BootServices, config: &config::types::BootC
 ///
 /// Tenta carregar do caminho padrão (boot/initfs) definido nas constantes.
 /// Suporta arquivos comprimidos (.zst) se disponível.
-fn load_initramfs(file_loader: &mut FileLoader) -> Option<types::LoadedFile> {
-    use crate::constants::paths::DEFAULT_INITFS_PATH;
+fn load_initramfs(file_loader: &mut FileLoader) -> Option<core::types::LoadedFile> {
+    use crate::core::constants::paths::DEFAULT_INITFS_PATH;
 
     info!("Carregando initramfs...");
 
@@ -569,7 +565,7 @@ fn use_protocol(
     protocol_name: &str,
     kernel_data: &[u8],
     cmdline: Option<&str>,
-    modules: &[types::LoadedFile],
+    modules: &[core::types::LoadedFile],
 ) -> protos::BootInfo {
     use protos::{BootProtocol, limine::LimineProtocol};
 
@@ -609,8 +605,8 @@ fn use_protocol(
 fn prepare_kernel_args_from_boot_info(
     allocator: &MemoryAllocator,
     boot_info: &protos::BootInfo,
-    modules: &[types::LoadedFile],
-    _framebuffer: &types::Framebuffer,
+    modules: &[core::types::LoadedFile],
+    _framebuffer: &core::types::Framebuffer,
 ) -> Result<*const KernelArgs> {
     // Alocar memória para KernelArgs
     let args_ptr = allocator.allocate_any(1)?;
@@ -644,8 +640,8 @@ fn prepare_kernel_args_from_boot_info(
 #[allow(dead_code)]
 fn prepare_kernel_args(
     allocator: &MemoryAllocator,
-    loaded_kernel: &types::LoadedKernel,
-    initfs: &Option<types::LoadedFile>,
+    loaded_kernel: &core::types::LoadedKernel,
+    initfs: &Option<core::types::LoadedFile>,
 ) -> Result<*const KernelArgs> {
     // Alocar memória para KernelArgs
     let args_ptr = allocator.allocate_any(1)?;

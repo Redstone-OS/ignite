@@ -164,3 +164,64 @@ pub struct FileProtocol {
     pub write_ex: usize, // Não implementado ainda
     pub flush_ex: usize, // Não implementado ainda
 }
+
+// ============================================================================
+// Helper Types & Implementations
+// ============================================================================
+
+/// CStr16 - UTF-16 null-terminated string wrapper
+pub struct CStr16;
+
+impl CStr16 {
+    /// Creates a CStr16 from a Rust string, writing to provided buffer
+    pub fn from_str_with_buf<'a>(
+        s: &str,
+        buf: &'a mut [u16],
+    ) -> core::result::Result<&'a [u16], ()> {
+        let mut i = 0;
+        for ch in s.chars() {
+            if i >= buf.len() - 1 {
+                return Err(()); // Buffer too small
+            }
+            if ch as u32 > 0xFFFF {
+                return Err(()); // Character out of range
+            }
+            buf[i] = ch as u16;
+            i += 1;
+        }
+        buf[i] = 0; // Null terminator
+        Ok(&buf[..=i])
+    }
+}
+
+/// File Mode
+#[derive(Debug, Copy, Clone)]
+pub enum FileMode {
+    Read,
+    ReadWrite,
+    Create,
+}
+
+impl FileMode {
+    pub fn as_u64(self) -> u64 {
+        match self {
+            FileMode::Read => FILE_MODE_READ,
+            FileMode::ReadWrite => FILE_MODE_READ | FILE_MODE_WRITE,
+            FileMode::Create => FILE_MODE_READ | FILE_MODE_WRITE | FILE_MODE_CREATE,
+        }
+    }
+}
+
+/// File Attribute
+#[derive(Debug, Copy, Clone)]
+pub struct FileAttribute(pub u64);
+
+impl FileAttribute {
+    pub fn empty() -> Self {
+        FileAttribute(0)
+    }
+
+    pub fn read_only() -> Self {
+        FileAttribute(FILE_READ_ONLY)
+    }
+}

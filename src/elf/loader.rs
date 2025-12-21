@@ -3,10 +3,12 @@
 use goblin::elf::Elf;
 
 use crate::{
+    core::{
+        error::{BootError, ElfError, Result},
+        types::LoadedKernel,
+    },
     elf::ElfParser,
-    error::{BootError, ElfError, Result},
     memory::MemoryAllocator,
-    types::LoadedKernel,
 };
 
 /// Carregador de ELF

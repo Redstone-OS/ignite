@@ -6,7 +6,7 @@
 
 use alloc::vec::Vec;
 
-use crate::error::{BootError, Result};
+use crate::core::error::Result;
 
 /// Tipos de compressão suportados
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]

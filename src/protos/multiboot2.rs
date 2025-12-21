@@ -7,9 +7,9 @@ use log::info;
 
 use super::{BootInfo, BootProtocol, ProtocolRegisters};
 use crate::{
-    error::{BootError, Result},
+    core::error::{BootError, Result},
     memory::MemoryAllocator,
-    types::LoadedFile,
+    core::types::LoadedFile,
 };
 
 // Constantes Multiboot 2
@@ -162,3 +162,4 @@ impl<'a> BootProtocol for Multiboot2Protocol<'a> {
         "multiboot2"
     }
 }
+

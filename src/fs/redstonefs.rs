@@ -5,7 +5,7 @@
 
 use core::marker::PhantomData;
 
-use crate::io::{Io, ReadOnly};
+use crate::hardware::io::{Io, ReadOnly};
 
 pub const BLOCK_SIZE: u64 = 4096;
 pub const RECORD_SIZE: u64 = 4096;

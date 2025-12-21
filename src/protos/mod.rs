@@ -7,7 +7,7 @@
 //! - Multiboot 2
 //! - Chainloading EFI/BIOS
 
-use crate::{error::Result, types::LoadedFile};
+use crate::core::{error::Result, types::LoadedFile};
 
 pub mod chainload;
 pub mod limine;

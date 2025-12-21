@@ -7,8 +7,8 @@ use core::{
 use bitflags::bitflags;
 
 #[cfg(any(target_arch = "x86", target_arch = "x86_64"))]
-use crate::io::Pio;
-use crate::io::{Io, Mmio, ReadOnly};
+use crate::hardware::io::Pio;
+use crate::hardware::io::{Io, Mmio, ReadOnly};
 
 bitflags! {
     /// Flags de habilitação de interrupção

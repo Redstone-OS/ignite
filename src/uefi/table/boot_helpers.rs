@@ -30,4 +30,24 @@ impl BootServices {
         let status = unsafe { (self.stall)(microseconds) };
         status.to_result()
     }
+
+    /// Acessa o console stdin from SystemTable
+    ///
+    /// NOTA: Este método assume que o BootServices foi obtido de uma
+    /// SystemTable e usa offset para encontrar SystemTable. Em produção,
+    /// passar SystemTable explicitamente.
+    #[inline]
+    pub fn stdin(&self) -> *mut crate::uefi::table::system::SimpleTextInputProtocol {
+        // Por enquanto retorna null - requer refatoração para passar SystemTable
+        // TODO: Passar SystemTable como parâmetro ou armazenar referência
+        core::ptr::null_mut()
+    }
+
+    /// Acessa o console stdout from SystemTable
+    #[inline]
+    pub fn stdout(&self) -> *mut crate::uefi::table::system::SimpleTextOutputProtocol {
+        // Por enquanto retorna null - requer refatoração para passar SystemTable
+        // TODO: Passar SystemTable como parâmetro ou armazenar referência
+        core::ptr::null_mut()
+    }
 }

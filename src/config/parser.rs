@@ -13,7 +13,7 @@ use super::{
     macros::MacroExpander,
     types::{BootConfig, MenuEntry, Module, WallpaperStyle},
 };
-use crate::error::{BootError, Result};
+use crate::core::error::{BootError, Result};
 
 /// Parser de arquivo de configuração
 pub struct ConfigParser {

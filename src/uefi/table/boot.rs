@@ -30,6 +30,13 @@ pub enum MemoryType {
     MaxMemoryType = 16,
 }
 
+// Aliases para compatibilidade com código existente
+impl MemoryType {
+    pub const CONVENTIONAL: Self = Self::ConventionalMemory;
+    pub const ACPI_RECLAIM: Self = Self::ACPIReclaimMemory;
+    pub const ACPI_NON_VOLATILE: Self = Self::ACPIMemoryNVS;
+}
+
 /// Allocate Type
 ///
 /// Spec: 7.2 - Memory Allocation Services

@@ -4,7 +4,7 @@
 
 use alloc::vec::Vec;
 
-use crate::error::{BootError, Result};
+use crate::core::error::{BootError, Result};
 
 /// Descritor de volume ISO9660
 #[repr(C, packed)]

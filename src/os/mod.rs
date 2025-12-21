@@ -1,6 +1,6 @@
 #[cfg(all(target_arch = "x86", target_os = "none"))]
 pub use self::bios::*;
-use crate::redstonefs::Disk;
+use crate::fs::redstonefs::Disk;
 
 #[cfg(all(target_arch = "x86", target_os = "none"))]
 #[macro_use]
@@ -79,7 +79,7 @@ pub trait Os {
     fn filesystem(
         &self,
         password_opt: Option<&[u8]>,
-    ) -> syscall::Result<crate::redstonefs::FileSystem<Self::D>>;
+    ) -> syscall::Result<crate::fs::redstonefs::FileSystem<Self::D>>;
 
     fn hwdesc(&self) -> OsHwDesc;
 

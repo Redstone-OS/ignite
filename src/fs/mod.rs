@@ -5,6 +5,7 @@
 pub mod compression;
 pub mod initfs;
 pub mod loader; // Suporte a compressão de arquivos
+pub mod redstonefs;
 
 pub use compression::{CompressionType, decompress, decompress_auto};
 pub use initfs::InitFsLoader;

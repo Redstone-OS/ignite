@@ -5,7 +5,7 @@
 
 use core::sync::atomic::{AtomicBool, Ordering};
 
-use crate::constants::serial::COM1_PORT;
+use crate::core::constants::serial::COM1_PORT;
 
 /// Flag global que controla se serial está ativado
 static SERIAL_ENABLED: AtomicBool = AtomicBool::new(true); // Ligado por padrão

@@ -9,9 +9,9 @@ use log::info;
 
 use super::{BootInfo, BootProtocol, ProtocolRegisters};
 use crate::{
-    error::{BootError, Result},
+    core::error::{BootError, Result},
     memory::MemoryAllocator,
-    types::LoadedFile,
+    core::types::LoadedFile,
 };
 
 // Constantes do protocolo de boot Linux
@@ -279,3 +279,4 @@ impl<'a> BootProtocol for LinuxProtocol<'a> {
         "linux"
     }
 }
+

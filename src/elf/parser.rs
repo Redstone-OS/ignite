@@ -1,7 +1,8 @@
 //! Parser de arquivos ELF
 
-use crate::error::{BootError, ElfError, Result};
 use goblin::elf::Elf;
+
+use crate::core::error::{BootError, ElfError, Result};
 
 /// Parser de arquivos ELF
 pub struct ElfParser;

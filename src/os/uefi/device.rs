@@ -14,7 +14,7 @@ use uefi::{
     },
 };
 
-use crate::redstonefs::{BLOCK_SIZE, Disk, RECORD_SIZE};
+use crate::fs::redstonefs::{BLOCK_SIZE, Disk, RECORD_SIZE};
 
 // Standard GetProtocol wrapper
 pub fn get_protocol<P: Protocol>(handle: Handle) -> uefi::Result<&'static mut P> {

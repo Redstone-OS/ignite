@@ -10,7 +10,7 @@ use log::info;
 
 use crate::{
     config::types::{BootConfig, MenuEntry},
-    types::Framebuffer,
+    core::types::Framebuffer,
     uefi::{
         BootServices,
         table::system::{InputKey, SCAN_DOWN, SCAN_ESC, SCAN_UP},
@@ -63,7 +63,7 @@ impl<'a> BootMenu<'a> {
         info!("  Boot automático em {} segundos...", timeout_seconds);
         info!("═══════════════════════════════════════════════════");
 
-        let stdin = boot_services.stdin();
+        let _stdin = boot_services.stdin();
 
         // Calcular ticks (verificar a cada 100ms)
         let tick_interval_ms = 100;
@@ -87,7 +87,7 @@ impl<'a> BootMenu<'a> {
             // Aguardando implementação de read_key
 
             // Aguardar 100ms (100,000 microsegundos)
-            let _ = boot_services.stall_helper(tick_interval_ms * 1000);
+            let _ = boot_services.stall_helper((tick_interval_ms * 1000) as usize);
         }
 
         info!("Iniciando boot automático...");
@@ -108,11 +108,11 @@ impl<'a> BootMenu<'a> {
 
     /// Renderiza menu em modo texto usando ConOut UEFI
     fn show_text(&mut self) -> usize {
-        let stdout = self.boot_services.stdout();
+        let _stdout = self.boot_services.stdout();
 
         loop {
             // Limpar tela
-            let _ = stdout.reset(false);
+            // let _ = _stdout.reset(false);
 
             // Banner
             info!("");
@@ -194,7 +194,7 @@ impl<'a> BootMenu<'a> {
 
     /// Aguarda input do usuário
     fn wait_for_key(&self) -> MenuAction {
-        let stdin = self.boot_services.stdin();
+        let _stdin = self.boot_services.stdin();
 
         loop {
             match stdin.read_key() {

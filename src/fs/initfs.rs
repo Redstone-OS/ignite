@@ -1,8 +1,9 @@
 //! Carregador de InitFS (sistema de arquivos inicial)
 
-use crate::error::Result;
-use crate::fs::FileLoader;
-use crate::types::LoadedFile;
+use crate::{
+    core::{error::Result, types::LoadedFile},
+    fs::FileLoader,
+};
 
 /// Carregador de InitFS
 pub struct InitFsLoader;
@@ -20,13 +21,17 @@ impl InitFsLoader {
 
         match file_loader.try_load_file("initfs")? {
             Some(initfs) => {
-                log::info!("InitFS encontrado: {} bytes em {:#x}", initfs.size, initfs.ptr);
+                log::info!(
+                    "InitFS encontrado: {} bytes em {:#x}",
+                    initfs.size,
+                    initfs.ptr
+                );
                 Ok(Some(initfs))
-            }
+            },
             None => {
                 log::warn!("InitFS não encontrado. Sistema iniciará sem userspace.");
                 Ok(None)
-            }
+            },
         }
     }
 }

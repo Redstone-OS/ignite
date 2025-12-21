@@ -2,15 +2,15 @@
 //!
 //! Carrega e gerencia configurações de boot a partir de arquivo
 
-use crate::error::Result;
-use crate::fs::FileLoader;
 use log::{info, warn};
+
+use crate::{core::error::Result, fs::FileLoader};
 
 /// Configuração principal do bootloader
 #[derive(Debug, Clone, Copy)]
 pub struct BootConfig {
     /// Configuração do menu de boot
-    pub menu: BootMenuConfig,
+    pub menu:    BootMenuConfig,
     /// Timeout do menu em segundos (0 = sem timeout)
     pub timeout: u32,
 }
@@ -52,9 +52,9 @@ impl BootConfig {
     /// Configuração padrão
     pub fn default() -> Self {
         Self {
-            menu: BootMenuConfig {
-                enabled: false, // Desabilitado por padrão
-                show_on_key: true, // Pode ser ativado com tecla
+            menu:    BootMenuConfig {
+                enabled:     false, // Desabilitado por padrão
+                show_on_key: true,  // Pode ser ativado com tecla
             },
             timeout: 5,
         }
@@ -70,7 +70,7 @@ impl BootConfig {
 #[derive(Debug, Clone)]
 pub struct BootMenuConfig {
     /// Menu habilitado por padrão
-    pub enabled: bool,
+    pub enabled:     bool,
     /// Permitir ativar menu com tecla
     pub show_on_key: bool,
 }
@@ -79,9 +79,9 @@ pub struct BootMenuConfig {
 #[derive(Debug, Clone, Copy)]
 pub struct OsEntry {
     /// Nome amigável do OS
-    pub name: &'static str,
+    pub name:        &'static str,
     /// Tipo de OS
-    pub os_type: OsType,
+    pub os_type:     OsType,
     /// Caminho do kernel/EFI
     pub kernel_path: &'static str,
     /// InitFS/InitRD (opcional)
@@ -105,8 +105,8 @@ impl OsEntry {
     /// Cria entrada para Redstone OS
     pub fn redstone() -> Self {
         Self {
-            name: "Redstone OS",
-            os_type: OsType::Redstone,
+            name:        "Redstone OS",
+            os_type:     OsType::Redstone,
             kernel_path: "forge",
             initfs_path: Some("initfs"),
         }
@@ -117,8 +117,8 @@ impl OsEntry {
     /// TODO: Detectar automaticamente instalações Linux
     pub fn linux() -> Self {
         Self {
-            name: "Linux",
-            os_type: OsType::Linux,
+            name:        "Linux",
+            os_type:     OsType::Linux,
             kernel_path: "vmlinuz",
             initfs_path: Some("initrd.img"),
         }
@@ -129,8 +129,8 @@ impl OsEntry {
     /// TODO: Detectar automaticamente instalação Windows
     pub fn windows() -> Self {
         Self {
-            name: "Windows",
-            os_type: OsType::Windows,
+            name:        "Windows",
+            os_type:     OsType::Windows,
             kernel_path: "\\EFI\\Microsoft\\Boot\\bootmgfw.efi",
             initfs_path: None,
         }
@@ -140,7 +140,7 @@ impl OsEntry {
 /// Lista de sistemas operacionais disponíveis
 pub struct OsList {
     pub entries: &'static [OsEntry],
-    pub count: usize,
+    pub count:   usize,
 }
 
 impl OsList {
@@ -157,7 +157,7 @@ impl OsList {
         // TODO: Usar alocação dinâmica ou lazy_static para lista de OS
         Self {
             entries: &[],
-            count: 0,
+            count:   0,
         }
     }
 

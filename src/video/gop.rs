@@ -1,8 +1,10 @@
 //! Implementação de saída de vídeo usando GOP (Graphics Output Protocol)
 
 use crate::{
-    error::{BootError, Result, VideoError},
-    types::Framebuffer,
+    core::{
+        error::{BootError, Result, VideoError},
+        types::Framebuffer,
+    },
     uefi::{
         BootServices, Handle,
         proto::console::gop::{GRAPHICS_OUTPUT_PROTOCOL_GUID, GraphicsOutputProtocol},
@@ -22,6 +24,18 @@ impl<'a> GopVideoOutput<'a> {
         Self {
             boot_services,
             image_handle,
+        }
+    }
+
+    /// Obtém o framebuffer do GOP
+    pub fn get_framebuffer(&self) -> Framebuffer {
+        // TODO: Implementar quando GOP parser estiver funcionando
+        Framebuffer {
+            ptr: 0,
+            size: 0,
+            horizontal_resolution: 0,
+            vertical_resolution:   0,
+            stride:                0,
         }
     }
 }

@@ -3,7 +3,7 @@
 //! Wrapper em torno dos serviços de alocação UEFI
 
 use crate::{
-    error::{BootError, MemoryError, Result},
+    core::error::{BootError, MemoryError, Result},
     uefi::{
         BootServices,
         table::boot::{AllocateType, MemoryType},
@@ -43,7 +43,12 @@ impl<'a> MemoryAllocator<'a> {
     /// * `address` - Endereço desejado
     /// * `pages` - Número de páginas a alocar
     pub fn allocate_at_address(&self, address: u64, pages: usize) -> Result<u64> {
-        self.allocate_pages(pages, AllocateType::Address(address))
+        // NOTA: AllocateAddress tenta alocar no endereço, mas UEFI pode alocar em outro
+        // lugar Para endereço específico garantido, precisaríamos de
+        // AllocateType::Address(address) mas nossa implementação atual não
+        // suporta isso
+        log::warn!("allocate_at_address: endereço {} não garantido", address);
+        self.allocate_pages(pages, AllocateType::AllocateAddress)
     }
 
     /// Aloca páginas em qualquer endereço disponível

@@ -7,22 +7,22 @@ use uefi::{
     proto::{Protocol, media::block::BlockIO as UefiBlockIo},
 };
 
-use crate::redstonefs::{BLOCK_SIZE, Disk, RECORD_SIZE};
+use crate::fs::redstonefs::{BLOCK_SIZE, Disk, RECORD_SIZE};
 
 pub enum DiskOrFileEfi {
     Disk(DiskEfi),
     File(Vec<u8>),
 }
 
-impl crate::redstonefs::Disk for DiskOrFileEfi {
+impl crate::fs::redstonefs::Disk for DiskOrFileEfi {
     fn read_at(&mut self, block: u64, buffer: &mut [u8]) -> syscall::Result<usize> {
         unsafe {
             match self {
                 DiskOrFileEfi::Disk(disk_efi) => disk_efi.read_at(block, buffer),
                 DiskOrFileEfi::File(data) => {
                     buffer.copy_from_slice(
-                        &data[(block * crate::redstonefs::BLOCK_SIZE) as usize
-                            ..(block * crate::redstonefs::BLOCK_SIZE) as usize + buffer.len()],
+                        &data[(block * crate::fs::redstonefs::BLOCK_SIZE) as usize
+                            ..(block * crate::fs::redstonefs::BLOCK_SIZE) as usize + buffer.len()],
                     );
                     Ok(buffer.len())
                 },

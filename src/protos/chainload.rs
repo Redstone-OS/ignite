@@ -6,9 +6,9 @@ use log::info;
 
 use super::{BootInfo, BootProtocol, ProtocolRegisters};
 use crate::{
-    error::{BootError, Result},
+    core::error::{BootError, Result},
     memory::MemoryAllocator,
-    types::LoadedFile,
+    core::types::LoadedFile,
 };
 
 /// Protocolo de chainload EFI
@@ -105,3 +105,4 @@ impl BiosChainloadProtocol {
 // impl BootProtocol for BiosChainloadProtocol {
 //     // Implementação para chainloading BIOS
 // }
+

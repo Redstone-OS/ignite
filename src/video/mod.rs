@@ -7,7 +7,7 @@ pub mod gop;
 
 pub use gop::GopVideoOutput;
 
-use crate::{error::Result, types::Framebuffer};
+use crate::core::{error::Result, types::Framebuffer};
 
 /// Trait para abstração de saída de vídeo
 pub trait VideoOutput {

@@ -3,13 +3,18 @@
 extern crate alloc;
 
 use crate::{
-    error::{BootError, FileSystemError, Result},
+    core::{
+        error::{BootError, FileSystemError, Result},
+        types::LoadedFile,
+    },
     memory::MemoryAllocator,
-    types::LoadedFile,
     uefi::{
         Handle, Status,
         proto::media::{
-            file::{FILE_INFO_GUID, FILE_MODE_READ, FileInfo, FileProtocol},
+            file::{
+                CStr16, FILE_INFO_GUID, FILE_MODE_READ, FileAttribute, FileInfo, FileMode,
+                FileProtocol,
+            },
             fs::SimpleFileSystemProtocol,
         },
     },
@@ -75,45 +80,47 @@ impl<'a> FileLoader<'a> {
         Err(BootError::FileSystem(FileSystemError::InvalidPath))?;
 
         // Criar buffer UTF-16 no stack (256 u16s = 512 bytes)
-        let mut utf16_buf = [0u16; 256];
-        let filename_cstr = CStr16::from_str_with_buf(path_str.as_str(), &mut utf16_buf)
-            .map_err(|_| BootError::FileSystem(FileSystemError::InvalidPath))?;
-
+        // let mut utf16_buf = [0u16; 256];
+        // let filename_cstr = CStr16::from_str_with_buf(path_str.as_str(), &mut
+        // utf16_buf) .map_err(|_|
+        // BootError::FileSystem(FileSystemError::InvalidPath))?;
+        //
         // Abrir arquivo
-        let mut file = self
-            .root
-            .open(filename_cstr, FileMode::Read, FileAttribute::empty())
-            .map_err(|_| {
-                log::error!("Arquivo não encontrado: {}", filename);
-                BootError::FileSystem(FileSystemError::FileNotFound)
-            })?
-            .into_regular_file()
-            .ok_or(BootError::FileSystem(FileSystemError::NotRegularFile))?;
-
+        // let mut file = self
+        // .root
+        // .open(filename_cstr, FileMode::Read, FileAttribute::empty())
+        // .map_err(|_| {
+        // log::error!("Arquivo não encontrado: {}", filename);
+        // BootError::FileSystem(FileSystemError::FileNotFound)
+        // })?
+        // .into_regular_file()
+        // .ok_or(BootError::FileSystem(FileSystemError::NotRegularFile))?;
+        // */
         // Obter tamanho do arquivo
-        let mut info_buf = [0u8; 128];
-        let file_info = file
-            .get_info::<FileInfo>(&mut info_buf)
-            .map_err(|_| BootError::FileSystem(FileSystemError::ReadError))?;
-        let file_size = file_info.file_size() as usize;
-
-        log::info!("Arquivo encontrado: {} bytes", file_size);
-
+        // let mut info_buf = [0u8; 128];
+        // let file_info = file
+        // .get_info::<FileInfo>(&mut info_buf)
+        // .map_err(|_| BootError::FileSystem(FileSystemError::ReadError))?;
+        // let file_size = file_info.file_size() as usize;
+        //
+        // log::info!("Arquivo encontrado: {} bytes", file_size);
+        //
         // Alocar memória para o arquivo
-        let file_pages = MemoryAllocator::pages_for_size(file_size);
-        let file_ptr = self.allocator.allocate_any(file_pages)?;
-
+        // let file_pages = MemoryAllocator::pages_for_size(file_size);
+        // let file_ptr = self.allocator.allocate_any(file_pages)?;
+        //
         // Ler arquivo para memória
-        let file_slice = unsafe { core::slice::from_raw_parts_mut(file_ptr as *mut u8, file_size) };
-        file.read(file_slice)
-            .map_err(|_| BootError::FileSystem(FileSystemError::ReadError))?;
-
-        log::info!("Arquivo carregado em {:#x}", file_ptr);
-
-        Ok(LoadedFile {
-            ptr:  file_ptr,
-            size: file_size,
-        })
+        // let file_slice = unsafe { core::slice::from_raw_parts_mut(file_ptr as *mut
+        // u8, file_size) }; file.read(file_slice)
+        // .map_err(|_| BootError::FileSystem(FileSystemError::ReadError))?;
+        //
+        // log::info!("Arquivo carregado em {:#x}", file_ptr);
+        //
+        // Ok(LoadedFile {
+        // ptr:  file_ptr,
+        // size: file_size,
+        // })
+        Err(BootError::FileSystem(FileSystemError::InvalidPath))
     }
 
     /// Tenta carregar um arquivo, retornando None se não encontrado
