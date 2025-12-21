@@ -1,16 +1,21 @@
 //! Redstone OS Bootloader (Ignite) - Entry Point
+//!
+//! O Executor Principal.
+//! Responsável por orquestrar a inicialização do hardware, carregar a
+//! configuração, interagir com o usuário e passar o controle para o Kernel.
 
 #![no_std]
 #![no_main]
 #![feature(abi_efiapi)]
-#![feature(alloc_error_handler)]
+#![feature(alloc_error_handler)] // Habilita o handler de OOM customizado
 
 extern crate alloc;
 
+// Imports da biblioteca Ignite
 use ignite::{
     config::{BootConfig, Protocol, loader::load_configuration},
     core::{
-        handoff::{BootInfo, FramebufferInfo as HandoffFbInfo},
+        handoff::{BootInfo, FramebufferInfo as HandoffFbInfo}, // Alias para evitar colisão
         logging,
     },
     fs::{FileSystem, UefiFileSystem},
@@ -23,20 +28,30 @@ use ignite::{
     video,
 };
 
+// ============================================================================
+// Alocador Global
+// ============================================================================
+
+// Define o alocador de memória para este binário.
 #[global_allocator]
 static ALLOCATOR: BumpAllocator = BumpAllocator::new();
 
+// ============================================================================
+// Ponto de Entrada UEFI
+// ============================================================================
+
 #[no_mangle]
 pub extern "efiapi" fn efi_main(image_handle: Handle, system_table: *mut SystemTable) -> ! {
+    // 1. Inicialização Básica (Sem Heap)
     unsafe {
         uefi::init(system_table, image_handle);
-        ignite::arch::x86::init();
-        logging::init();
+        ignite::arch::x86::init(); // Inicializa COM1
+        logging::init(); // Conecta o Logger ao COM1
     }
 
     ignite::println!("Ignite Bootloader Iniciando...");
 
-    // Heap Init
+    // 2. Inicializar Heap Global
     unsafe {
         let heap_size = ignite::core::config::memory::BOOTLOADER_HEAP_SIZE;
         let heap_start = uefi::system_table()
@@ -48,10 +63,9 @@ pub extern "efiapi" fn efi_main(image_handle: Handle, system_table: *mut SystemT
     }
     ignite::println!("Heap inicializada.");
 
-    // FS Init
+    // 3. Configurar Sistema de Arquivos de Boot (ESP)
     let bs = uefi::system_table().boot_services();
 
-    // Configurar FS
     let loaded_image_ptr = bs
         .open_protocol(
             image_handle,
@@ -80,21 +94,37 @@ pub extern "efiapi" fn efi_main(image_handle: Handle, system_table: *mut SystemT
         unsafe { &mut *(fs_proto_ptr as *mut uefi::proto::media::fs::SimpleFileSystemProtocol) };
     let mut boot_fs = UefiFileSystem::new(fs_proto_ref);
 
-    // Carregar Configuração
-    let config = match load_configuration(&mut boot_fs) {
+    // 4. Carregar Configuração
+    // Tenta ler do disco. Se falhar ou retornar config vazia, força Rescue.
+    let mut config = match load_configuration(&mut boot_fs) {
         Ok(cfg) => cfg,
         Err(e) => {
-            ignite::println!("AVISO: Erro ao carregar config: {:?}. Usando padrao.", e);
-            BootConfig::default()
+            ignite::println!(
+                "AVISO: Erro critico na config: {:?}. Entrando em modo Recovery.",
+                e
+            );
+            BootConfig::recovery()
         },
     };
 
-    // Configurar Vídeo
-    let (_gop, mut fb_info) = video::init_video(bs).expect("FALHA CRITICA: Video GOP");
+    // REDE DE SEGURANÇA: Se a config carregada não tiver entradas (ex: arquivo
+    // vazio ou parser falhou silenciosamente), força o modo de recuperação para
+    // evitar pânico na UI.
+    if config.entries.is_empty() {
+        ignite::println!(
+            "AVISO: Nenhuma entrada encontrada na configuracao. Ativando modo Recovery."
+        );
+        config = BootConfig::recovery();
+    }
 
-    // UI Menu
+    // 5. Configurar Vídeo (GOP)
+    let (_gop, mut fb_info) =
+        video::init_video(bs).expect("FALHA CRITICA: Nao foi possivel iniciar Video GOP");
+
+    // 6. Interface de Usuário (Menu Gráfico)
     let selected_entry = if !config.quiet && config.timeout.unwrap_or(0) > 0 {
         let fb_ptr = fb_info.addr;
+
         let ui_fb_info = HandoffFbInfo {
             address: fb_info.addr,
             size:    fb_info.size,
@@ -107,46 +137,53 @@ pub extern "efiapi" fn efi_main(image_handle: Handle, system_table: *mut SystemT
         let mut menu = Menu::new(&config);
         unsafe { menu.run(fb_ptr, ui_fb_info) }
     } else {
-        config
-            .entries
-            .get(config.default_entry_idx)
-            .expect("Configuracao invalida: Default Entry index fora dos limites")
+        // Fallback seguro se o índice padrão for inválido
+        if config.default_entry_idx >= config.entries.len() {
+            &config.entries[0]
+        } else {
+            &config.entries[config.default_entry_idx]
+        }
     };
 
     ignite::println!("Bootando: {}", selected_entry.name);
 
-    // Diagnóstico
+    // 7. Diagnóstico
     let health = Diagnostics::check_entry(&mut boot_fs, selected_entry);
     if let ignite::recovery::diagnostics::HealthStatus::Critical(msg) = health {
-        panic!("Diagnostico falhou: {}", msg);
+        panic!(
+            "Diagnostico falhou para entrada '{}': {}",
+            selected_entry.name, msg
+        );
     }
 
-    // Carregar arquivo para RAM (seja Kernel ou EFI App)
+    // 8. Carregar Kernel
     let mut root_dir = boot_fs.root().expect("Falha raiz FS");
     let mut kernel_file = root_dir
         .open_file(&selected_entry.path)
-        .expect("Kernel nao encontrado");
-    let kernel_data = ignite::fs::read_to_bytes(kernel_file.as_mut()).expect("Erro leitura Kernel");
+        .expect("Kernel nao encontrado no disco");
+    let kernel_data =
+        ignite::fs::read_to_bytes(kernel_file.as_mut()).expect("Erro de I/O ao ler Kernel");
 
-    // Segurança
+    // 9. Segurança
     let policy = SecurityPolicy::new(&config);
     if let Err(e) = validate_and_measure(&kernel_data, &selected_entry.name, &policy) {
-        panic!("Violacao de Seguranca: {:?}", e);
+        panic!("Violacao de Seguranca detectada: {:?}", e);
     }
 
-    // --- RAMIFICAÇÃO DE PROTOCOLO ---
+    // 10. Executar Protocolo de Boot
+    // RAMIFICAÇÃO: Chainload vs Kernel Nativo
 
     if selected_entry.protocol == Protocol::EfiChainload {
         ignite::println!("Executando EFI Chainload...");
 
-        // Para chainload, usamos LoadImage passando o buffer da memória
-        // Isso evita depender de DevicePaths complexos
         let mut child_handle = Handle::null();
+
+        // LoadImage espera SourceBuffer se BootPolicy=FALSE(0)
         let status = unsafe {
             (bs.load_image_f)(
-                0, // BootFromMemory
+                0, // Boot from Memory
                 image_handle,
-                core::ptr::null_mut(), // DevicePath (opcional se buffer)
+                core::ptr::null_mut(),
                 kernel_data.as_ptr() as *mut core::ffi::c_void,
                 kernel_data.len(),
                 &mut child_handle,
@@ -161,6 +198,7 @@ pub extern "efiapi" fn efi_main(image_handle: Handle, system_table: *mut SystemT
         let mut exit_data_size: usize = 0;
         let mut exit_data: *mut u16 = core::ptr::null_mut();
 
+        // Passa o controle para o aplicativo EFI (Shell)
         let status =
             unsafe { (bs.start_image_f)(child_handle, &mut exit_data_size, &mut exit_data) };
 
@@ -171,16 +209,18 @@ pub extern "efiapi" fn efi_main(image_handle: Handle, system_table: *mut SystemT
                 core::hint::spin_loop();
             }
         } else {
-            ignite::println!("Aplicacao EFI finalizada. Reiniciando...");
+            // Se o app retornar (ex: usuário digitou 'exit' no shell), reinicia.
+            ignite::println!("App finalizado. Reiniciando sistema...");
             let rt = uefi::system_table().runtime_services();
             rt.reset_system(uefi::table::runtime::ResetType::Cold, uefi::Status::SUCCESS);
         }
     }
 
-    // --- PROTOCOLOS DE KERNEL (Nativo/Linux) ---
+    // --- CAMINHO KERNEL NATIVO / LINUX ---
 
     let mut frame_allocator = UefiFrameAllocator::new(bs);
-    let mut page_table = PageTableManager::new(&mut frame_allocator).expect("Falha PageTables");
+    let mut page_table =
+        PageTableManager::new(&mut frame_allocator).expect("Falha ao criar PageTables");
 
     let launch_info = load_any(
         &mut frame_allocator,
@@ -191,9 +231,9 @@ pub extern "efiapi" fn efi_main(image_handle: Handle, system_table: *mut SystemT
     )
     .expect("Falha ao preparar Kernel (Protocol Error)");
 
-    ignite::println!("Saindo do UEFI...");
+    ignite::println!("Saindo dos servicos de boot UEFI...");
 
-    // Exit Boot Services
+    // 11. Exit Boot Services
     let (map_key, _iter) = get_memory_map_key(bs);
     if bs
         .exit_boot_services(image_handle, map_key)
@@ -212,7 +252,7 @@ pub extern "efiapi" fn efi_main(image_handle: Handle, system_table: *mut SystemT
         }
     }
 
-    // Jump
+    // 12. Salto para o Kernel
     unsafe {
         jump_to_kernel(
             launch_info.entry_point,
@@ -226,6 +266,10 @@ pub extern "efiapi" fn efi_main(image_handle: Handle, system_table: *mut SystemT
     }
 }
 
+// ============================================================================
+// Helpers Internos
+// ============================================================================
+
 fn get_memory_map_key(
     bs: &ignite::uefi::BootServices,
 ) -> (
@@ -236,6 +280,7 @@ fn get_memory_map_key(
     let mut map_key = 0;
     let mut descriptor_size = 0;
     let mut descriptor_version = 0;
+
     let _ = (bs.get_memory_map_f)(
         &mut map_size,
         core::ptr::null_mut(),
@@ -244,7 +289,7 @@ fn get_memory_map_key(
         &mut descriptor_version,
     );
 
-    // Stub de retorno
+    // Retorna o mapa de memória e um iterador vazio
     (map_key, core::iter::empty())
 }
 

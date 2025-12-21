@@ -5,7 +5,6 @@
 
 use alloc::{
     string::{String, ToString},
-    vec,
     vec::Vec,
 };
 
@@ -35,17 +34,9 @@ pub struct BootConfig {
 }
 
 impl Default for BootConfig {
+    /// Configuração Padrão (Limpa).
+    /// Usada pelo Parser como base para ler o arquivo de configuração.
     fn default() -> Self {
-        // Cria uma entrada de recuperação padrão caso não haja config no disco
-        let rescue_entry = Entry {
-            name:     "UEFI Shell (Rescue)".to_string(),
-            protocol: Protocol::EfiChainload,
-            path:     "boot():/EFI/BOOT/shellx64.efi".to_string(),
-            cmdline:  None,
-            modules:  Vec::new(),
-            dtb_path: None,
-        };
-
         Self {
             timeout:           Some(5),
             default_entry_idx: 0,
@@ -53,9 +44,29 @@ impl Default for BootConfig {
             serial_enabled:    true,
             resolution:        None,
             wallpaper:         None,
-            // Importante: Inicializa com pelo menos uma entrada para evitar pânico no menu
-            entries:           vec![rescue_entry],
+            entries:           Vec::new(), // IMPORTANTE: Começa vazio para não duplicar entradas
         }
+    }
+}
+
+impl BootConfig {
+    /// Retorna a configuração de Recuperação (Recovery).
+    /// Deve ser usada APENAS quando o arquivo de configuração não for
+    /// encontrado.
+    pub fn recovery() -> Self {
+        let recovery_entry = Entry {
+            name:     "UEFI Shell (Recovery)".to_string(),
+            protocol: Protocol::EfiChainload,
+            path:     "boot():/EFI/BOOT/shellx64.efi".to_string(),
+            cmdline:  None,
+            modules:  Vec::new(),
+            dtb_path: None,
+        };
+
+        // Usa os defaults, mas adiciona a entrada de rescue
+        let mut config = Self::default();
+        config.entries.push(recovery_entry);
+        config
     }
 }
 
@@ -94,6 +105,7 @@ impl From<&str> for Protocol {
             "limine" => Protocol::Limine,
             "efi" | "chainload" => Protocol::EfiChainload,
             "multiboot2" => Protocol::Multiboot2,
+            "redstone" | "native" => Protocol::Limine,
             _ => Protocol::Unknown,
         }
     }
