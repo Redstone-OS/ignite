@@ -7,6 +7,9 @@ use crate::redstonefs::Disk;
 mod bios;
 
 #[cfg(any(target_arch = "riscv64", target_os = "uefi"))]
+use alloc::vec::Vec;
+
+#[cfg(any(target_arch = "riscv64", target_os = "uefi"))]
 #[allow(unused_imports)]
 pub use self::uefi::*;
 
@@ -91,4 +94,7 @@ pub trait Os {
     fn get_text_position(&self) -> (usize, usize);
     fn set_text_position(&self, x: usize, y: usize);
     fn set_text_highlight(&self, highlight: bool);
+
+    /// Reads a file from the boot volume relative to the root.
+    fn read_file(&self, path: &str) -> Option<Vec<u8>>;
 }

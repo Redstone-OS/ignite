@@ -1,6 +1,9 @@
-use core::{cell::RefCell, mem, ptr, slice};
+use core::{cell::RefCell, convert::TryInto, mem, ptr, slice};
 
-use uefi::Identify;
+use uefi::{
+    CString16, Identify,
+    proto::media::file::{File, FileInfo},
+};
 use uefi::{
     Handle, Result, Status,
     proto::{
@@ -127,6 +130,72 @@ impl OsEfi {
             st:      sys_tab,
             outputs: RefCell::new(outputs),
         }
+    }
+
+    fn read_file_uefi(&self, path: &str) -> Option<Vec<u8>> {
+        let boot_services = self.st.boot_services();
+
+        // Get the LoadedImage protocol to find out which device we were loaded from
+        let loaded_image_ref = boot_services
+            .open_protocol_exclusive::<uefi::proto::loaded_image::LoadedImage>(image_handle())
+            .expect("Failed to get LoadedImage protocol");
+        let unsafe_loaded_image = &*loaded_image_ref;
+        let device_handle = unsafe_loaded_image.device().expect("Device handle is None");
+
+        // Open the SimpleFileSystem protocol on that device
+        let mut sfs_ref = boot_services
+            .open_protocol_exclusive::<uefi::proto::media::fs::SimpleFileSystem>(device_handle)
+            .ok()?;
+        let unsafe_sfs = &mut *sfs_ref;
+
+        // Open volume (root directory)
+        let mut root_dir = unsafe_sfs.open_volume().ok()?;
+
+        // Open the file
+        // Note: UEFI paths use backslashes, but we accept forward slashes
+        let uefi_path = path.replace('/', "\\");
+        let path_cstr = CString16::try_from(uefi_path.as_str()).expect("Invalid path");
+        let file_handle = root_dir
+            .open(
+                &path_cstr,
+                uefi::proto::media::file::FileMode::Read,
+                uefi::proto::media::file::FileAttribute::empty(),
+            )
+            .ok()?;
+
+        // Convert to regular file
+        let mut file = match file_handle.into_type().ok()? {
+            uefi::proto::media::file::FileType::Regular(f) => f,
+            _ => return None,
+        };
+
+        // Get file size info
+        // We allocate a buffer for FileInfo. It's usually small.
+        let mut info_buf = [0u8; 128];
+        let info_result = file.get_info::<FileInfo>(&mut info_buf);
+        let info: &mut FileInfo = match info_result {
+            Ok(info) => info,
+            Err(_) => {
+                // If buffer is too small, we might need a bigger one, but 128 is standard for
+                // FileInfo Let's assume file not found or error if we can't get
+                // info
+                return None;
+            },
+        };
+        let file_size = info.file_size() as usize;
+
+        // Allocate buffer and read
+        let ptr = self.alloc_zeroed_page_aligned(file_size);
+        if ptr.is_null() {
+            return None;
+        }
+
+        let mut buffer = unsafe { Vec::from_raw_parts(ptr, file_size, file_size) };
+        if file.read(&mut buffer).is_err() {
+            return None;
+        }
+
+        Some(buffer)
     }
 }
 
@@ -368,6 +437,10 @@ impl Os for OsEfi {
         //    .stdout()
         //    .set_attribute(unsafe { core::mem::transmute(attr) });
         // TODO: Fix attribute setting
+    }
+
+    fn read_file(&self, path: &str) -> Option<Vec<u8>> {
+        self.read_file_uefi(path)
     }
 }
 

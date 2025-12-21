@@ -244,6 +244,12 @@ impl Os for OsBios {
             vga.fg = VgaTextColor::Gray;
         }
     }
+
+    fn read_file(&self, _path: &str) -> Option<Vec<u8>> {
+        // TODO: Implement reading from disk using BIOS INT 13h extensions for FAT
+        // support For now, we only support UEFI boot
+        None
+    }
 }
 
 #[unsafe(no_mangle)]

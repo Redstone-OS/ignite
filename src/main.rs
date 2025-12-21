@@ -12,7 +12,7 @@ mod redstonefs;
 
 extern crate alloc;
 
-use alloc::{format, string::String, vec::Vec};
+use alloc::{boxed::Box, format, string::String, vec::Vec};
 use core::{
     cmp,
     fmt::{self, Write},
@@ -468,17 +468,20 @@ fn ignite_main(os: &impl Os) -> (usize, u64, KernelArgs) {
         OsHwDesc::NotFound => (0, 0),
     };
 
-    let (mut fs, password_opt) = redstonefs(os);
+    // TODO(RFS): Reabilitar RedstoneFS quando a biblioteca `libs/rfs` estiver
+    // pronta Por enquanto, usamos carregamento direto da ESP via UEFI
+    // let (mut fs, password_opt) = redstonefs(os);
 
-    print!("RedstoneFS ");
-    for i in 0..fs.header.uuid().len() {
-        if i == 4 || i == 6 || i == 8 || i == 10 {
-            print!("-");
-        }
+    // print!("RedstoneFS ");
+    // for i in 0..fs.header.uuid().len() {
+    //     if i == 4 || i == 6 || i == 8 || i == 10 {
+    //         print!("-");
+    //     }
 
-        print!("{:>02x}", fs.header.uuid()[i]);
-    }
-    println!(": {} MiB", fs.header.size() / MIBI as u64);
+    //     print!("{:>02x}", fs.header.uuid()[i]);
+    // }
+    // println!(": {} MiB", fs.header.size() / MIBI as u64);
+    println!("Filesystem: UEFI (FAT32) - Temporary Workaround");
     println!();
 
     let mut mode_opts = Vec::new();
@@ -496,56 +499,45 @@ fn ignite_main(os: &impl Os) -> (usize, u64, KernelArgs) {
         panic!("Failed to allocate memory for stack");
     }
 
-    let live_opt = if live {
-        let size = fs.header.size();
-
-        print!("live: 0/{} MiB", size / MIBI as u64);
-
-        let ptr = os.alloc_zeroed_page_aligned(size as usize);
-        if ptr.is_null() {
-            panic!("Failed to allocate memory for live");
-        }
-
-        let live = unsafe { slice::from_raw_parts_mut(ptr, size as usize) };
-
-        let mut i = 0;
-        for chunk in live.chunks_mut(MIBI) {
-            print!("\rlive: {}/{} MiB", i / MIBI as u64, size / MIBI as u64);
-            i += unsafe {
-                fs.disk
-                    .read_at(fs.block + i / redstonefs::BLOCK_SIZE, chunk)
-                    .expect("Failed to read live disk") as u64
-            };
-        }
-        println!("\rlive: {}/{} MiB", i / MIBI as u64, size / MIBI as u64);
-
-        println!("Switching to live disk");
-        unsafe {
-            LIVE_OPT = Some((fs.block, slice::from_raw_parts_mut(ptr, size as usize)));
-        }
-
-        area_add(OsMemoryEntry {
-            base: live.as_ptr() as u64,
-            size: live.len() as u64,
-            kind: OsMemoryKind::Reserved,
-        });
-
-        Some(live)
-    } else {
-        None
-    };
+    // Live disk functionality disabled for UEFI boot workaround
+    let live_opt: Option<&'static mut [u8]> = None;
 
     let (kernel, kernel_entry) = {
-        let kernel = load_to_memory(os, &mut fs, "boot", "kernel", Filetype::Elf);
-        let (kernel_entry, kernel_64bit) = elf_entry(kernel);
+        // let kernel = load_to_memory(os, &mut fs, "boot", "kernel", Filetype::Elf);
+        let path = "boot/kernel";
+        print!("Loading {}: ", path);
+        let mut kernel_vec = os.read_file(path).expect("Failed to find boot/kernel");
+        println!("{} MiB", kernel_vec.len() / MIBI);
+
+        // We need to keep this memory allocated. Vec usually allocates on heap.
+        // We leak the vec to get a slice with static lifetime conceptually for the boot
+        // process Ideally we should copy to page aligned memory if Vec is not,
+        // but os.alloc_zeroed uses UEFI allocator which returns aligned memory?
+        // Vec uses Global allocator. For simplicity, we just leak it into a
+        // slice.
+        let kernel_slice = Box::leak(kernel_vec.into_boxed_slice());
+
+        let (kernel_entry, kernel_64bit) = elf_entry(kernel_slice);
         unsafe {
             KERNEL_64BIT = kernel_64bit;
         }
-        (kernel, kernel_entry)
+        (kernel_slice, kernel_entry)
     };
 
     let (bootstrap_size, bootstrap_base) = {
-        let initfs_slice = load_to_memory(os, &mut fs, "boot", "initfs", Filetype::Initfs);
+        // let initfs_slice = load_to_memory(os, &mut fs, "boot", "initfs",
+        // Filetype::Initfs);
+        let path = "boot/initfs";
+        print!("Loading {}: ", path);
+        let mut initfs_vec = os.read_file(path).expect("Failed to find boot/initfs");
+        println!("{} MiB", initfs_vec.len() / MIBI);
+
+        let initfs_slice = Box::leak(initfs_vec.into_boxed_slice());
+
+        let magic = &initfs_slice[..8];
+        if magic != b"RedstoneFtw" {
+            panic!("{} has invalid magic number {:#X?}", path, magic);
+        }
 
         let memory = unsafe {
             let total_size = initfs_slice.len().next_multiple_of(4096);
@@ -590,26 +582,29 @@ fn ignite_main(os: &impl Os) -> (usize, u64, KernelArgs) {
             writeln!(w, "DISK_LIVE_SIZE={:016x}", live.len()).unwrap();
             writeln!(w, "RESTONEFS_BLOCK={:016x}", 0).unwrap();
         } else {
-            writeln!(w, "RESTONEFS_BLOCK={:016x}", fs.block).unwrap();
+            // Placeholder for FAT32 workaround
+            writeln!(w, "RESTONEFS_BLOCK={:016x}", 0).unwrap();
         }
         write!(w, "RESTONEFS_UUID=").unwrap();
-        for i in 0..fs.header.uuid().len() {
-            if i == 4 || i == 6 || i == 8 || i == 10 {
-                write!(w, "-").unwrap();
-            }
+        // for i in 0..fs.header.uuid().len() {
+        //     if i == 4 || i == 6 || i == 8 || i == 10 {
+        //         write!(w, "-").unwrap();
+        //     }
 
-            write!(w, "{:>02x}", fs.header.uuid()[i]).unwrap();
-        }
+        //     write!(w, "{:>02x}", fs.header.uuid()[i]).unwrap();
+        // }
+        // Fake UUID for now
+        write!(w, "00000000-0000-0000-0000-000000000000").unwrap();
         writeln!(w).unwrap();
-        if let Some(password) = password_opt {
-            writeln!(
-                w,
-                "RESTONEFS_PASSWORD_ADDR={:016x}",
-                password.as_ptr() as usize
-            )
-            .unwrap();
-            writeln!(w, "RESTONEFS_PASSWORD_SIZE={:016x}", password.len()).unwrap();
-        }
+        // if let Some(password) = password_opt {
+        //     writeln!(
+        //         w,
+        //         "RESTONEFS_PASSWORD_ADDR={:016x}",
+        //         password.as_ptr() as usize
+        //     )
+        //     .unwrap();
+        //     writeln!(w, "RESTONEFS_PASSWORD_SIZE={:016x}", password.len()).unwrap();
+        // }
 
         #[cfg(target_arch = "riscv64")]
         {
