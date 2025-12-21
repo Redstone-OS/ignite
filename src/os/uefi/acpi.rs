@@ -70,7 +70,7 @@ fn validate_rsdp(address: usize, _v2: bool) -> core::result::Result<usize, Inval
 }
 
 pub(crate) fn find_acpi_table_pointers(os: &impl Os) -> Option<(u64, u64)> {
-    let st = uefi_services::system_table();
+    let st = uefi::table::system_table_boot().unwrap();
     let cfg_tables = st.config_table();
     let mut acpi = None;
     let mut acpi2 = None;

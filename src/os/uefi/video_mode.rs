@@ -20,7 +20,7 @@ impl Iterator for VideoModeIter {
     type Item = OsVideoMode;
     fn next(&mut self) -> Option<Self::Item> {
         if let Some(ref mut output) = self.output_opt {
-            let st = uefi_services::system_table();
+            let st = uefi::table::system_table_boot().unwrap();
             let bs = st.boot_services();
             // output.0 é GraphicsOutput. modes() aceita &BootServices.
             // Checar assinatura.
@@ -28,7 +28,7 @@ impl Iterator for VideoModeIter {
             // Já que o iterador de modo consome, reconstruímos ele toda vez? Ineficiente
             // mas seguro. Ou apenas usar nth(self.i).
 
-            let st = uefi_services::system_table();
+            let st = uefi::table::system_table_boot().unwrap();
             let bs = st.boot_services();
             if let Some(mode) = output.0.modes(bs).nth(self.i) {
                 let info = mode.info();

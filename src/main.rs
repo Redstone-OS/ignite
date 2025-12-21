@@ -12,6 +12,47 @@ mod redstonefs;
 
 extern crate alloc;
 
+// Panic handler para no_std com serial output detalhado
+#[panic_handler]
+fn panic(info: &core::panic::PanicInfo) -> ! {
+    unsafe {
+        let port: u16 = 0x3F8;
+
+        // Enviar "PANIC: "
+        for &byte in b"PANIC: " {
+            core::arch::asm!("out dx, al", in("dx") port, in("al") byte);
+        }
+
+        // Tentar mostrar localização
+        if let Some(location) = info.location() {
+            // Arquivo
+            for &byte in location.file().as_bytes() {
+                core::arch::asm!("out dx, al", in("dx") port, in("al") byte);
+            }
+            core::arch::asm!("out dx, al", in("dx") port, in("al") b':');
+
+            // Linha (simplificado - apenas mostrar alguns dígitos)
+            let line = location.line();
+            if line >= 100 {
+                let d = (line / 100) as u8;
+                core::arch::asm!("out dx, al", in("dx") port, in("al") b'0' + d);
+            }
+            if line >= 10 {
+                let d = ((line / 10) % 10) as u8;
+                core::arch::asm!("out dx, al", in("dx") port, in("al") b'0' + d);
+            }
+            let d = (line % 10) as u8;
+            core::arch::asm!("out dx, al", in("dx") port, in("al") b'0' + d);
+        }
+
+        // Nova linha
+        for &byte in b"\r\n" {
+            core::arch::asm!("out dx, al", in("dx") port, in("al") byte);
+        }
+    }
+    loop {}
+}
+
 use alloc::{boxed::Box, format, string::String, vec::Vec};
 use core::{
     cmp,
@@ -20,8 +61,7 @@ use core::{
 };
 
 use redstonefs::Disk;
-#[cfg(any(target_arch = "riscv64", target_os = "uefi"))]
-use uefi_services::{print, println};
+use uefi::{print, println}; // Importar macros de I/O
 
 use self::{
     arch::{paging_create, paging_framebuffer},
@@ -421,15 +461,23 @@ fn ignite_main(os: &impl Os) -> (usize, u64, KernelArgs) {
             );
         }
 
-        let (kernel_entry, kernel_64bit) = elf_entry(kernel_slice);
+        let (kernel_entry_offset, kernel_64bit) = elf_entry(kernel_slice);
+
+        // CRITICAL: O entry point no ELF é um offset relativo ao início do arquivo.
+        // Precisamos adicionar o endereço base onde o kernel foi carregado.
+        let kernel_base_addr = kernel_slice.as_ptr() as u64;
+        let kernel_entry_absolute = kernel_base_addr + kernel_entry_offset;
+
+        println!("[DEBUG] Kernel carregado em: 0x{:X}", kernel_base_addr);
+        println!("[DEBUG] Entry offset (ELF): 0x{:X}", kernel_entry_offset);
         println!(
-            "[DEBUG] Entry point: 0x{:X}, 64-bit: {}",
-            kernel_entry, kernel_64bit
+            "[DEBUG] Entry absoluto: 0x{:X}, 64-bit: {}",
+            kernel_entry_absolute, kernel_64bit
         );
         unsafe {
             KERNEL_64BIT = kernel_64bit;
         }
-        (kernel_slice, kernel_entry)
+        (kernel_slice, kernel_entry_absolute)
     };
 
     let (bootstrap_size, bootstrap_base) = {

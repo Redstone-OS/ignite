@@ -1,5 +1,4 @@
 use log::{LevelFilter, Log, Metadata, Record};
-use uefi_services::println;
 
 // Logger Simples
 //
@@ -24,7 +23,8 @@ impl Log for Logger {
 
     fn log(&self, record: &Record) {
         if self.enabled(record.metadata()) {
-            println!("{} - {}", record.level(), record.args());
+            // println!("{} - {}", record.level(), record.args());
+            // Logger desabilitado temporariamente após remoção de uefi_services
         }
     }
 

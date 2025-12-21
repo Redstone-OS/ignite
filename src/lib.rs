@@ -26,6 +26,10 @@
 
 extern crate alloc;
 
+// Global allocator para UEFI - TEMPORARIAMENTE DESABILITADO PARA DEBUG
+// #[global_allocator]
+// static ALLOCATOR: uefi::allocator::Allocator = uefi::allocator::Allocator;
+
 pub mod boot_info;
 pub mod config;
 pub mod elf;
@@ -42,7 +46,7 @@ pub mod video;
 
 // use crate::config::BootConfig; // TODO: Debug
 use log::info;
-use uefi::{prelude::*, table::boot::MemoryType};
+use uefi::{mem::memory_map::MemoryMap, prelude::*, table::boot::MemoryType};
 
 // use crate::security::{IntegrityChecker, RollbackProtection, SecureBootManager}; // TODO:
 // Debug
@@ -68,8 +72,24 @@ use crate::{
 /// # Retorna
 /// Nunca retorna - transfere o controle para o kernel
 pub fn boot(image_handle: Handle, mut system_table: SystemTable<Boot>) -> ! {
-    // Inicializar serviços UEFI
-    uefi::helpers::init(&mut system_table).unwrap();
+    // Debug: bootloader started
+    unsafe {
+        let port: u16 = 0x3F8;
+        for &byte in b"[1] Boot started\r\n" {
+            core::arch::asm!("out dx, al", in("dx") port, in("al") byte);
+        }
+    }
+
+    // Inicializar serviços UEFI (API 0.31: init() não recebe argumentos)
+    uefi::helpers::init().unwrap();
+
+    unsafe {
+        let port: u16 = 0x3F8;
+        for &byte in b"[2] Init OK\r\n" {
+            core::arch::asm!("out dx, al", in("dx") port, in("al") byte);
+        }
+    }
+
     system_table.stdout().reset(false).unwrap();
 
     info!("═══════════════════════════════════════════════════");
@@ -174,12 +194,9 @@ pub fn boot(image_handle: Handle, mut system_table: SystemTable<Boot>) -> ! {
     let memory_map_addr = (boot_info_addr + BOOT_INFO_SIZE as u64) as usize;
     const MAX_REGIONS: usize = 256;
 
-    // Obter memory map da UEFI
-    let map_size = boot_services.memory_map_size();
-    let mut map_buffer = alloc::vec![0u8; map_size.map_size + 10 * map_size.entry_size];
-    let memory_map = boot_services
-        .memory_map(&mut map_buffer)
-        .expect("Failed to get UEFI memory map");
+    // Obter memory map da UEFI usando nova API freestanding 0.31
+    let memory_map =
+        uefi::boot::memory_map(MemoryType::LOADER_DATA).expect("Failed to get UEFI memory map");
 
     // Converter para nosso formato
     let memory_regions = unsafe {
@@ -262,10 +279,12 @@ pub fn boot(image_handle: Handle, mut system_table: SystemTable<Boot>) -> ! {
 
     info!("Chamando exit_boot_services...");
 
-    // 10. Sair dos serviços de boot
+    // 10. Sair dos serviços de boot usando nova API freestanding 0.31
     // TODO: Se boot for bem-sucedido (kernel assume controle),
     // resetar contador de tentativas em próximo boot
-    let (_rt, _map) = system_table.exit_boot_services(MemoryType::LOADER_DATA);
+    unsafe {
+        let _ = uefi::boot::exit_boot_services(MemoryType::LOADER_DATA);
+    }
 
     // 11. Saltar para o kernel usando função naked
     // IMPORTANTE: Inline assembly não funciona, usar naked function

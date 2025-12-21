@@ -20,13 +20,38 @@ unsafe extern "C" fn kernel_entry(
     args: *const KernelArgs,
 ) -> ! {
     unsafe {
-        uefi_services::println!("[DEBUG] kernel_entry: Saindo de Boot Services...");
+        // uefi_services::println!("[DEBUG] kernel_entry: Saindo de Boot Services...");
+
+        // Debug ANTES de exit_boot_services
+        unsafe {
+            let port: u16 = 0x3F8;
+            for &byte in b"[PRE-EXIT-BS] Calling exit_boot_services...\r\n".iter() {
+                ::core::arch::asm!("out dx, al", in("dx") port, in("al") byte);
+            }
+        }
+
         // Read memory map and exit boot services
         memory_map().exit_boot_services();
+
+        // Debug IMEDIATAMENTE APOS exit_boot_services
+        unsafe {
+            let port: u16 = 0x3F8;
+            for &byte in b"[POST-EXIT-BS] Returned from exit_boot_services!\r\n".iter() {
+                ::core::arch::asm!("out dx, al", in("dx") port, in("al") byte);
+            }
+        }
 
         // IMPORTANTE: Apos exit_boot_services(), nao podemos mais usar
         // uefi_services::println! porque os servicos UEFI foram desligados.
         // Qualquer tentativa de usar println aqui causara um travamento.
+
+        // Debug via serial direta (sem UEFI)
+        unsafe {
+            let port: u16 = 0x3F8;
+            for &byte in b"[POST-BS] CR4...\r\n".iter() {
+                ::core::arch::asm!("out dx, al", in("dx") port, in("al") byte);
+            }
+        }
 
         // Enable FXSAVE/FXRSTOR, Page Global, Page Address Extension, and Page Size
         // Extension
@@ -37,23 +62,58 @@ unsafe extern "C" fn kernel_entry(
             | Cr4Flags::PAGE_SIZE_EXTENSION;
         Cr4::write(cr4);
 
+        unsafe {
+            let port: u16 = 0x3F8;
+            for &byte in b"[POST-BS] EFER...\r\n".iter() {
+                ::core::arch::asm!("out dx, al", in("dx") port, in("al") byte);
+            }
+        }
+
         // Enable Long mode and NX bit
         let mut efer = Efer::read();
         efer |= x86_64::registers::model_specific::EferFlags::LONG_MODE_ENABLE
             | x86_64::registers::model_specific::EferFlags::NO_EXECUTE_ENABLE;
         unsafe { Efer::write(efer) };
 
+        unsafe {
+            let port: u16 = 0x3F8;
+            for &byte in b"[POST-BS] CR3...\r\n".iter() {
+                ::core::arch::asm!("out dx, al", in("dx") port, in("al") byte);
+            }
+        }
+
         // Set new page map
         let phys_frame = PhysFrame::containing_address(PhysAddr::new(page_phys as u64));
         Cr3::write(phys_frame, Cr3::read().1);
+
+        unsafe {
+            let port: u16 = 0x3F8;
+            for &byte in b"[POST-BS] CR0...\r\n".iter() {
+                ::core::arch::asm!("out dx, al", in("dx") port, in("al") byte);
+            }
+        }
 
         // Enable paging, write protect kernel, protected mode
         let mut cr0 = Cr0::read();
         cr0 |= Cr0Flags::PAGING | Cr0Flags::WRITE_PROTECT | Cr0Flags::PROTECTED_MODE_ENABLE;
         Cr0::write(cr0);
 
+        unsafe {
+            let port: u16 = 0x3F8;
+            for &byte in b"[POST-BS] Stack...\r\n".iter() {
+                ::core::arch::asm!("out dx, al", in("dx") port, in("al") byte);
+            }
+        }
+
         // Set stack
         asm!("mov rsp, {}", in(reg) stack);
+
+        unsafe {
+            let port: u16 = 0x3F8;
+            for &byte in b"[POST-BS] Jump!\r\n".iter() {
+                ::core::arch::asm!("out dx, al", in("dx") port, in("al") byte);
+            }
+        }
 
         // Call kernel entry
         let entry_fn: extern "sysv64" fn(*const KernelArgs) -> ! = mem::transmute(func);
@@ -81,8 +141,9 @@ pub fn main() -> Result<()> {
 
     let (page_phys, func, args) = crate::ignite_main(&mut os);
 
-    uefi_services::println!("[DEBUG] Preparando para saltar para o kernel...");
-    uefi_services::println!("[DEBUG] page_phys=0x{:X}, func=0x{:X}", page_phys, func);
+    // uefi_services::println!("[DEBUG] Preparando para saltar para o kernel...");
+    // uefi_services::println!("[DEBUG] page_phys=0x{:X}, func=0x{:X}", page_phys,
+    // func);
     unsafe {
         kernel_entry(
             page_phys,

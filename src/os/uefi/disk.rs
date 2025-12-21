@@ -42,7 +42,6 @@ impl crate::redstonefs::Disk for DiskOrFileEfi {
 pub struct DiskEfi(pub &'static mut UefiBlockIo, pub &'static mut [u8]);
 
 use uefi::Identify;
-use uefi_services::println;
 
 unsafe impl Identify for DiskEfi {
     const GUID: Guid = UefiBlockIo::GUID;
@@ -95,12 +94,7 @@ impl Disk for DiskEfi {
                     if buffer.len() <= self.1.len() {
                         ptr = self.1.as_mut_ptr();
                     } else {
-                        println!(
-                            "DiskEfi::read_at 0x{:X} requires alignment, ptr = 0x{:p}, len = 0x{:x}",
-                            block,
-                            ptr,
-                            buffer.len()
-                        );
+                        // println!("DiskEfi::read_at 0x{:X} requires alignment", block);
                         return Err(Error::new(EINVAL));
                     }
                 }
@@ -125,7 +119,7 @@ impl Disk for DiskEfi {
                     Ok(len)
                 },
                 Err(e) => {
-                    uefi_services::println!("DiskEfi::read_at 0x{:X} failed: {:?}", block, e);
+                    // uefi_services::println!("DiskEfi::read_at 0x{:X} failed: {:?}", block, e);
                     Err(Error::new(EIO))
                 }
             }
@@ -133,12 +127,12 @@ impl Disk for DiskEfi {
     }
 
     fn write_at(&mut self, block: u64, _buffer: &[u8]) -> Result<usize> {
-        println!("DiskEfi::write_at 0x{:X} not implemented", block);
+        // println!("DiskEfi::write_at 0x{:X} not implemented", block);
         Err(Error::new(EIO))
     }
 
     fn size(&mut self) -> Result<u64> {
-        println!("DiskEfi::size not implemented");
+        // println!("DiskEfi::size not implemented");
         Err(Error::new(EIO))
     }
 }

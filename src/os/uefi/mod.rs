@@ -21,7 +21,7 @@ use uefi::{
         boot::{AllocateType, MemoryType},
     },
 };
-use uefi_services::{print, println};
+use uefi::{print, println}; // Importar macros de I/O
 
 use self::{
     device::{device_path_to_string, disk_device_priority},
@@ -282,7 +282,7 @@ impl Os for OsEfi {
         let mut outputs = self.outputs.borrow_mut();
         let (output, _efi_edid_opt) = &mut outputs[output_i];
 
-        let st = uefi_services::system_table();
+        let st = uefi::table::system_table_boot().unwrap();
         let bs = st.boot_services();
 
         let mode_obj = output
@@ -384,7 +384,7 @@ impl Os for OsEfi {
     }
 
     fn clear_text(&self) {
-        let mut st = uefi_services::system_table();
+        let mut st = uefi::table::system_table_boot().unwrap();
         let _ = st.stdout().clear();
     }
 
@@ -394,7 +394,7 @@ impl Os for OsEfi {
     }
 
     fn set_text_position(&self, x: usize, y: usize) {
-        let mut st = uefi_services::system_table();
+        let mut st = uefi::table::system_table_boot().unwrap();
         let _ = st.stdout().set_cursor_position(x, y);
     }
 
@@ -420,7 +420,7 @@ impl Os for OsEfi {
         let attr = (bg as usize) << 4 | (fg as usize);
 
         // We use global system table to get mutable stdout
-        let st = uefi_services::system_table();
+        let st = uefi::table::system_table_boot().unwrap();
         // Cast attr to type expected by set_attribute if needed, likely usize
         // or Attribute newtype? If set_attribute takes strict type, we
         // might need unsafe transmute or find the constructor. Let's
@@ -462,7 +462,7 @@ fn main(image: Handle, mut st: SystemTable<uefi::table::Boot>) -> Status {
     }
 
     unsafe {
-        uefi::helpers::init(&mut st).unwrap();
+        uefi::helpers::init().unwrap();
     }
 
     // Desabilitar Watchdog
