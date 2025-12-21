@@ -335,7 +335,7 @@ fn redstonefs<O: Os>(os: &O) -> (redstonefs::FileSystem<O::D>, Option<&'static [
                 // Senha incorreta, tente novamente
                 syscall::ENOKEY => (),
                 _ => {
-                    panic!("Failed to open RedstoneFS: {}", err);
+                    panic!("Failed to open RedstoneFS: {:?}", err);
                 },
             },
         }
@@ -358,11 +358,11 @@ fn load_to_memory<O: Os>(
     fs.tx(|tx| {
         let dir_node = tx
             .find_node(redstonefs::TreePtr::root(), dirname)
-            .unwrap_or_else(|err| panic!("Failed to find {} directory: {}", dirname, err));
+            .unwrap_or_else(|err| panic!("Failed to find {} directory: {:?}", dirname, err));
 
         let node = tx
             .find_node(dir_node.ptr(), filename)
-            .unwrap_or_else(|err| panic!("Failed to find {} file: {}", filename, err));
+            .unwrap_or_else(|err| panic!("Failed to find {} file: {:?}", filename, err));
 
         let size = node.data().size();
 
@@ -385,7 +385,7 @@ fn load_to_memory<O: Os>(
             );
             i += tx
                 .read_node_inner(&node, i, chunk)
-                .unwrap_or_else(|err| panic!("Failed to read `{}` file: {}", filename, err))
+                .unwrap_or_else(|err| panic!("Failed to read `{}` file: {:?}", filename, err))
                 as u64;
         }
         println!(
@@ -411,7 +411,7 @@ fn load_to_memory<O: Os>(
     })
     .unwrap_or_else(|err| {
         panic!(
-            "RedstoneFS transaction failed while loading `{}`: {}",
+            "RedstoneFS transaction failed while loading `{}`: {:?}",
             filename, err
         )
     })

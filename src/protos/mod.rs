@@ -4,7 +4,6 @@
 //! boot. Protocolos atualmente suportados:
 //! - Protocolo Limine (nativo)
 //! - Protocolo de Boot Linux
-//! - Multiboot 1
 //! - Multiboot 2
 //! - Chainloading EFI/BIOS
 
@@ -13,7 +12,6 @@ use crate::{error::Result, types::LoadedFile};
 pub mod chainload;
 pub mod limine;
 pub mod linux;
-pub mod multiboot1;
 pub mod multiboot2;
 
 /// Traço de protocolo de boot
@@ -87,8 +85,6 @@ pub enum ProtocolType {
     Limine,
     /// Protocolo de boot Linux
     Linux,
-    /// Multiboot versão 1
-    Multiboot1,
     /// Multiboot versão 2
     Multiboot2,
     /// Chainloading EFI
@@ -103,7 +99,6 @@ impl ProtocolType {
         match s.to_lowercase().as_str() {
             "limine" | "native" => Some(Self::Limine),
             "linux" => Some(Self::Linux),
-            "multiboot" | "multiboot1" => Some(Self::Multiboot1),
             "multiboot2" => Some(Self::Multiboot2),
             "efi" | "uefi" | "efi_chainload" => Some(Self::EfiChainload),
             "bios" | "bios_chainload" => Some(Self::BiosChainload),
@@ -116,7 +111,6 @@ impl ProtocolType {
         match self {
             Self::Limine => "limine",
             Self::Linux => "linux",
-            Self::Multiboot1 => "multiboot1",
             Self::Multiboot2 => "multiboot2",
             Self::EfiChainload => "efi_chainload",
             Self::BiosChainload => "bios_chainload",

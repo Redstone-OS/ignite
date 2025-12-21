@@ -25,10 +25,12 @@ impl Iterator for VideoModeIter {
             // output.0 é GraphicsOutput. modes() aceita &BootServices.
             // Checar assinatura.
             // Precisamos avançar para self.i
-            // Já que o iterador de modo consome, reconstruímos ele toda vez? Ineficiente mas
-            // seguro. Ou apenas usar nth(self.i).
+            // Já que o iterador de modo consome, reconstruímos ele toda vez? Ineficiente
+            // mas seguro. Ou apenas usar nth(self.i).
 
-            if let Some(mode) = output.0.modes().nth(self.i) {
+            let st = uefi_services::system_table();
+            let bs = st.boot_services();
+            if let Some(mode) = output.0.modes(bs).nth(self.i) {
                 let info = mode.info();
                 let id = self.i;
                 self.i += 1;

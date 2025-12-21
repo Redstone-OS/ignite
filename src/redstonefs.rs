@@ -39,7 +39,7 @@ pub struct FileSystem<D> {
 impl<D: Disk> FileSystem<D> {
     pub fn open(
         disk: D,
-        password: Option<&[u8]>,
+        _password: Option<&[u8]>,
         block_opt: Option<u64>,
         _readonly: bool,
     ) -> syscall::Result<Self> {
@@ -67,16 +67,16 @@ pub struct Transaction<'a, D: 'a> {
 }
 
 impl<'a, D: Disk> Transaction<'a, D> {
-    pub fn find_node(&mut self, ptr: TreePtr, name: &str) -> syscall::Result<Node> {
+    pub fn find_node(&mut self, _ptr: TreePtr, _name: &str) -> syscall::Result<Node> {
         // Stub
         Err(syscall::Error::new(syscall::ENOENT))
     }
 
     pub fn read_node_inner(
         &mut self,
-        node: &Node,
-        offset: u64,
-        buf: &mut [u8],
+        _node: &Node,
+        _offset: u64,
+        _buf: &mut [u8],
     ) -> syscall::Result<usize> {
         // Stub
         Ok(0)

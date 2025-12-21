@@ -1,9 +1,13 @@
 use core::{arch::asm, mem};
 
 use uefi::Result;
-use x86::{
-    controlregs::{self, Cr0, Cr4},
-    msr,
+use x86_64::{
+    PhysAddr,
+    registers::{
+        control::{Cr0, Cr0Flags, Cr3, Cr4, Cr4Flags},
+        model_specific::Efer,
+    },
+    structures::paging::{PageTableFlags, PhysFrame},
 };
 
 use super::super::{OsEfi, memory_map::memory_map};
@@ -21,25 +25,30 @@ unsafe extern "C" fn kernel_entry(
 
         // Enable FXSAVE/FXRSTOR, Page Global, Page Address Extension, and Page Size
         // Extension
-        let mut cr4 = controlregs::cr4();
-        cr4 |= Cr4::CR4_ENABLE_SSE
-            | Cr4::CR4_ENABLE_GLOBAL_PAGES
-            | Cr4::CR4_ENABLE_PAE
-            | Cr4::CR4_ENABLE_PSE;
-        controlregs::cr4_write(cr4);
+        // x86_64 crate: Cr4::read() returns Cr4Flags
+        let mut cr4 = Cr4::read();
+        cr4 |= Cr4Flags::OSFXSR
+            | Cr4Flags::PAGE_GLOBAL
+            | Cr4Flags::PHYSICAL_ADDRESS_EXTENSION
+            | Cr4Flags::PAGE_SIZE_EXTENSION;
+        Cr4::write(cr4);
 
         // Enable Long mode and NX bit
-        let mut efer = msr::rdmsr(msr::IA32_EFER);
-        efer |= 1 << 11 | 1 << 8;
-        msr::wrmsr(msr::IA32_EFER, efer);
+        // Efer::read() -> EferFlags
+        let mut efer = Efer::read();
+        efer |= x86_64::registers::model_specific::EferFlags::LONG_MODE_ENABLE
+            | x86_64::registers::model_specific::EferFlags::NO_EXECUTE_ENABLE;
+        unsafe { Efer::write(efer) };
 
         // Set new page map
-        controlregs::cr3_write(page_phys as u64);
+        // Cr3::write(pml4_frame, flags)
+        let phys_frame = PhysFrame::containing_address(PhysAddr::new(page_phys as u64));
+        Cr3::write(phys_frame, Cr3::read().1);
 
         // Enable paging, write protect kernel, protected mode
-        let mut cr0 = controlregs::cr0();
-        cr0 |= Cr0::CR0_ENABLE_PAGING | Cr0::CR0_WRITE_PROTECT | Cr0::CR0_PROTECTED_MODE;
-        controlregs::cr0_write(cr0);
+        let mut cr0 = Cr0::read();
+        cr0 |= Cr0Flags::PAGING | Cr0Flags::WRITE_PROTECT | Cr0Flags::PROTECTED_MODE_ENABLE;
+        Cr0::write(cr0);
 
         // Set stack
         asm!("mov rsp, {}", in(reg) stack);
@@ -55,15 +64,18 @@ pub fn main() -> Result<()> {
 
     let mut os = OsEfi::new();
 
-    // Disable cursor
-    let _ = os
-        .st
-        .boot_services()
-        .set_image_handle(crate::os::uefi::image_handle());
-    // os.st is SystemTable. stdout() is available.
-    if let Some(output) = os.st.stdout() {
-        let _ = output.enable_cursor(false);
+    // In uefi 0.28, stdout() returns &mut Output.
+    unsafe {
+        let _ = os
+            .st
+            .boot_services()
+            .set_image_handle(crate::os::uefi::image_handle());
     }
+
+    // In uefi 0.28, stdout() returns &mut Output.
+    // In uefi 0.28, stdout() returns &mut Output.
+    let output = os.st.stdout();
+    let _ = output.enable_cursor(false);
 
     let (page_phys, func, args) = crate::ignite_main(&mut os);
 
@@ -84,7 +96,5 @@ pub fn main() -> Result<()> {
 }
 
 pub fn disable_interrupts() {
-    unsafe {
-        asm!("cli");
-    }
+    x86_64::instructions::interrupts::disable();
 }

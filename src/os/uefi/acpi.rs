@@ -6,24 +6,26 @@ pub const ACPI_TABLE_GUID: Guid = uefi::table::cfg::ACPI_GUID;
 
 use crate::Os;
 
+#[repr(C, packed)]
+#[derive(Clone, Copy, Debug)]
+struct Rsdp {
+    signature:       [u8; 8], // b"RSD PTR "
+    chksum:          u8,
+    oem_id:          [u8; 6],
+    revision:        u8,
+    rsdt_addr:       u32,
+    // os campos a seguir estão disponíveis apenas para ACPI 2.0, e são reservados caso
+    // contrário
+    length:          u32,
+    xsdt_addr:       u64,
+    extended_chksum: u8,
+    _rsvd:           [u8; 3],
+}
+
+#[derive(Debug)]
 struct Invalid;
 
 fn validate_rsdp(address: usize, _v2: bool) -> core::result::Result<usize, Invalid> {
-    #[repr(C, packed)]
-    #[derive(Clone, Copy, Debug)]
-    struct Rsdp {
-        signature:       [u8; 8], // b"RSD PTR "
-        chksum:          u8,
-        oem_id:          [u8; 6],
-        revision:        u8,
-        rsdt_addr:       u32,
-        // os campos a seguir estão disponíveis apenas para ACPI 2.0, e são reservados caso
-        // contrário
-        length:          u32,
-        xsdt_addr:       u64,
-        extended_chksum: u8,
-        _rsvd:           [u8; 3],
-    }
     // paginação não está habilitada neste estágio; podemos apenas ler o endereço
     // físico aqui.
     let rsdp_bytes =
@@ -68,12 +70,14 @@ fn validate_rsdp(address: usize, _v2: bool) -> core::result::Result<usize, Inval
 }
 
 pub(crate) fn find_acpi_table_pointers(os: &impl Os) -> Option<(u64, u64)> {
-    let cfg_tables = uefi_services::system_table().config_table();
+    let st = uefi_services::system_table();
+    let cfg_tables = st.config_table();
     let mut acpi = None;
     let mut acpi2 = None;
     for cfg_table in cfg_tables.iter() {
         if cfg_table.guid == ACPI_TABLE_GUID {
-            match validate_rsdp(cfg_table.address, false) {
+            // address is *const c_void, validate_rsdp takes usize
+            match validate_rsdp(cfg_table.address as usize, false) {
                 Ok(len) => {
                     let s =
                         unsafe { core::slice::from_raw_parts(cfg_table.address as *const u8, len) };

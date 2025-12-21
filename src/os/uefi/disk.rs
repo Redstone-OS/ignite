@@ -39,7 +39,7 @@ impl crate::redstonefs::Disk for DiskOrFileEfi {
     }
 }
 
-pub struct DiskEfi(pub &'static mut UefiBlockIo, &'static mut [u8]);
+pub struct DiskEfi(pub &'static mut UefiBlockIo, pub &'static mut [u8]);
 
 use uefi::Identify;
 use uefi_services::println;
