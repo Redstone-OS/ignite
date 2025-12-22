@@ -141,7 +141,7 @@ qemu-system-x86_64 \
 
 O Ignite é organizado em módulos altamente coesos e fracamente acoplados:
 
-```
+```bash
 ignite/
 ├── arch/           # Abstração de arquitetura (x86_64, aarch64, riscv64)
 ├── config/         # Sistema de configuração (parser, loader)
@@ -196,8 +196,7 @@ Para informações detalhadas, consulte [docs/ARQUITETURA.md](docs/ARQUITETURA.m
 
 ## 📁 Estrutura do Projeto
 
-```
-.
+```bash
 ├── Cargo.toml              # Manifesto do projeto
 ├── rust-toolchain.toml     # Configuração da toolchain
 ├── .clippy.toml            # Configuração do Clippy
