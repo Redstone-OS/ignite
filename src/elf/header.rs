@@ -32,7 +32,7 @@ pub fn validate_header(header: &elf_hdr::Header) -> Result<()> {
     }
 
     // 2. Verificar Classe/Arquitetura (Deve ser 64-bit)
-    // O Ignite (v0.4.0) roda exclusivamente em Long Mode (64-bit).
+    // O Ignite (v0.1.0) roda exclusivamente em Long Mode (64-bit).
     // TODO(Arch): Adicionar suporte condicional para 32-bit se portarmos para x86
     // legado.
     if header.e_ident[elf_hdr::EI_CLASS] != elf_hdr::ELFCLASS64 {
