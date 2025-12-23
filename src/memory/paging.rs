@@ -44,35 +44,115 @@ impl PageTableManager {
     }
 
     /// Cria um mapeamento Identity (Virtual == Físico).
-    /// Essencial para que o bootloader continue rodando após ligar paginação.
+    /// CRITICO: Essencial para que o bootloader continue funcionando após
+    /// trocar CR3! Sem isso, o código do bootloader causa page fault
+    /// imediato.
     pub fn identity_map(
         &mut self,
-        _phys_addr: u64,
-        _count: usize,
-        _allocator: &mut (impl FrameAllocator + ?Sized),
+        phys_addr: u64,
+        count: usize,
+        allocator: &mut (impl FrameAllocator + ?Sized),
     ) -> Result<()> {
-        // TODO: Implementar walker
+        // Identity map: virtual = physical
+        for i in 0..count {
+            let addr = phys_addr + (i as u64 * 4096);
+            self.map_page(addr, addr, PAGE_PRESENT | PAGE_WRITABLE, allocator)?;
+        }
         Ok(())
     }
 
-    /// Mapeia o Kernel no Higher Half.
-    /// Aceita `?Sized` para permitir `dyn FrameAllocator` vindo do ElfLoader.
+    /// Mapeia o Kernel no Higher Half (ou onde o ELF especificar).
+    /// CRITICO: Implementacao real necessaria para evitar page fault/triple
+    /// fault!
     pub fn map_kernel(
         &mut self,
         phys: u64,
         virt: u64,
         pages: usize,
-        _allocator: &mut (impl FrameAllocator + ?Sized),
+        allocator: &mut (impl FrameAllocator + ?Sized),
     ) -> Result<()> {
         if phys % 4096 != 0 || virt % 4096 != 0 {
             return Err(BootError::Memory(MemoryError::InvalidAlignment));
         }
 
-        // Loop placeholder para mapeamento
-        for _i in 0..pages {
-            // let offset = (i as u64) * 4096;
-            // self.map_page(...)
+        // Mapear cada pagina individualmente
+        for i in 0..pages {
+            let page_phys = phys + (i as u64 * 4096);
+            let page_virt = virt + (i as u64 * 4096);
+
+            self.map_page(
+                page_phys,
+                page_virt,
+                PAGE_PRESENT | PAGE_WRITABLE,
+                allocator,
+            )?;
         }
+        Ok(())
+    }
+
+    /// Mapeia uma unica página 4KB: Virtual -> Fisica
+    /// Cria tables intermediarias (PDP, PD, PT) sob demanda
+    fn map_page(
+        &mut self,
+        phys: u64,
+        virt: u64,
+        flags: u64,
+        allocator: &mut (impl FrameAllocator + ?Sized),
+    ) -> Result<()> {
+        // Extrair indices da hierarquia de paginacao (4-level)
+        let pml4_idx = ((virt >> 39) & 0x1FF) as usize;
+        let pdpt_idx = ((virt >> 30) & 0x1FF) as usize;
+        let pd_idx = ((virt >> 21) & 0x1FF) as usize;
+        let pt_idx = ((virt >> 12) & 0x1FF) as usize;
+
+        // Acessar PML4
+        let pml4 = unsafe { &mut *(self.pml4_phys_addr as *mut [u64; 512]) };
+
+        // Nivel 3: PDPT (Page Directory Pointer Table)
+        let pdpt_addr = if pml4[pml4_idx] & PAGE_PRESENT != 0 {
+            pml4[pml4_idx] & 0x000F_FFFF_FFFF_F000 // Mascara para endereco
+        } else {
+            let new_pdpt = allocator.allocate_frame(1)?;
+            unsafe {
+                core::ptr::write_bytes(new_pdpt as *mut u8, 0, 4096);
+            }
+            pml4[pml4_idx] = new_pdpt | PAGE_PRESENT | PAGE_WRITABLE;
+            new_pdpt
+        };
+
+        let pdpt = unsafe { &mut *(pdpt_addr as *mut [u64; 512]) };
+
+        // Nivel 2: PD (Page Directory)
+        let pd_addr = if pdpt[pdpt_idx] & PAGE_PRESENT != 0 {
+            pdpt[pdpt_idx] & 0x000F_FFFF_FFFF_F000
+        } else {
+            let new_pd = allocator.allocate_frame(1)?;
+            unsafe {
+                core::ptr::write_bytes(new_pd as *mut u8, 0, 4096);
+            }
+            pdpt[pdpt_idx] = new_pd | PAGE_PRESENT | PAGE_WRITABLE;
+            new_pd
+        };
+
+        let pd = unsafe { &mut *(pd_addr as *mut [u64; 512]) };
+
+        // Nivel 1: PT (Page Table)
+        let pt_addr = if pd[pd_idx] & PAGE_PRESENT != 0 {
+            pd[pd_idx] & 0x000F_FFFF_FFFF_F000
+        } else {
+            let new_pt = allocator.allocate_frame(1)?;
+            unsafe {
+                core::ptr::write_bytes(new_pt as *mut u8, 0, 4096);
+            }
+            pd[pd_idx] = new_pt | PAGE_PRESENT | PAGE_WRITABLE;
+            new_pt
+        };
+
+        let pt = unsafe { &mut *(pt_addr as *mut [u64; 512]) };
+
+        // Nivel 0: Mapear a pagina final
+        pt[pt_idx] = phys | flags;
+
         Ok(())
     }
 }

@@ -43,3 +43,27 @@ pub fn read_to_bytes(file: &mut dyn File) -> crate::core::error::Result<alloc::v
     }
     Ok(buf)
 }
+
+/// Lê exatamente `buffer.len()` bytes do arquivo para o buffer fornecido.
+/// Retorna erro se não conseguir ler todos os bytes (arquivo truncado ou corrompido).
+/// 
+/// Esta função é utilizada quando você já alocou memória (ex: via UEFI allocate_pool)
+/// e quer ler o arquivo diretamente neste buffer, sem alocações intermediárias.
+pub fn read_exact(file: &mut dyn File, buffer: &mut [u8]) -> crate::core::error::Result<()> {
+    let mut total_read = 0;
+    
+    while total_read < buffer.len() {
+        let n = file.read(&mut buffer[total_read..])?;
+        
+        if n == 0 {
+            // EOF antes de ler tudo - arquivo corrompido ou menor que esperado
+            return Err(crate::core::error::BootError::FileSystem(
+                crate::core::error::FileSystemError::ReadError
+            ));
+        }
+        
+        total_read += n;
+    }
+    
+    Ok(())
+}

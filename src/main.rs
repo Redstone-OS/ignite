@@ -156,13 +156,57 @@ pub extern "efiapi" fn efi_main(image_handle: Handle, system_table: *mut SystemT
         );
     }
 
-    // 8. Carregar Kernel
+    // 8. Carregar Kernel (Alocação UEFI Direta - Padrão Industrial)
+    // ----------------------------------------------------------------
+    // Ao invés de usar Vec<u8> no heap do bootloader (limitado a 4MB),
+    // alocamos diretamente via UEFI allocate_pool. Isso permite carregar
+    // kernels de qualquer tamanho sem desperdício de RAM.
+
     let mut root_dir = boot_fs.root().expect("Falha raiz FS");
     let mut kernel_file = root_dir
         .open_file(&selected_entry.path)
         .expect("Kernel nao encontrado no disco");
-    let kernel_data =
-        ignite::fs::read_to_bytes(kernel_file.as_mut()).expect("Erro de I/O ao ler Kernel");
+
+    // 8.1: Obter tamanho exato do kernel via metadata
+    let kernel_metadata = kernel_file
+        .metadata()
+        .expect("Falha ao obter metadata do kernel");
+    let kernel_size = kernel_metadata.size as usize;
+
+    ignite::println!(
+        "Tamanho do kernel: {} bytes ({} MB)",
+        kernel_size,
+        kernel_size / (1024 * 1024)
+    );
+
+    // 8.2: Validar tamanho (proteção contra kernels malformados ou muito grandes)
+    if kernel_size == 0 {
+        panic!("Kernel tem tamanho zero! Arquivo corrompido?");
+    }
+    if kernel_size > ignite::core::config::limits::MAX_KERNEL_SIZE {
+        panic!(
+            "Kernel muito grande: {} bytes (max: {} bytes)",
+            kernel_size,
+            ignite::core::config::limits::MAX_KERNEL_SIZE
+        );
+    }
+
+    // 8.3: Alocar memória UEFI diretamente (LoaderData - será passada ao kernel via
+    // memory map)
+    let kernel_buffer_ptr = bs
+        .allocate_pool(uefi::table::boot::MemoryType::LoaderData, kernel_size)
+        .expect("FALHA CRITICA: Nao foi possivel alocar memoria UEFI para o kernel");
+
+    ignite::println!("Buffer UEFI alocado em: 0x{:X}", kernel_buffer_ptr as u64);
+
+    // 8.4: Criar slice Rust do buffer UEFI (unsafe: confiamos que UEFI alocou
+    // corretamente)
+    let kernel_data: &mut [u8] =
+        unsafe { core::slice::from_raw_parts_mut(kernel_buffer_ptr as *mut u8, kernel_size) };
+
+    // 8.5: Ler kernel diretamente para o buffer (sem alocações intermediárias)
+    ignite::fs::read_exact(kernel_file.as_mut(), kernel_data)
+        .expect("Erro de I/O ao ler Kernel para buffer UEFI");
 
     // 9. Segurança
     let policy = SecurityPolicy::new(&config);
