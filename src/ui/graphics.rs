@@ -24,7 +24,7 @@ impl<'a> GraphicsContext<'a> {
     /// O chamador deve garantir que `buffer_ptr` aponta para uma região válida
     /// de VRAM com o tamanho especificado em `info`.
     pub unsafe fn new(buffer_ptr: u64, info: FramebufferInfo) -> Self {
-        let buffer = core::slice::from_raw_parts_mut(buffer_ptr as *mut u8, info.size);
+        let buffer = core::slice::from_raw_parts_mut(buffer_ptr as *mut u8, info.size as usize);
 
         Self {
             buffer,
@@ -60,10 +60,10 @@ impl<'a> GraphicsContext<'a> {
 
         // Mapeia componentes de cor baseado no formato do vídeo
         let (r, g, b) = match self.info.format {
-            // PixelFormat::RgbReserved8BitPerColor
-            0 => (color.r, color.g, color.b),
-            // PixelFormat::BgrReserved8BitPerColor (Padrão UEFI)
-            1 => (color.b, color.g, color.r),
+            // PixelFormat::Rgb
+            crate::core::handoff::PixelFormat::Rgb => (color.r, color.g, color.b),
+            // PixelFormat::Bgr
+            crate::core::handoff::PixelFormat::Bgr => (color.b, color.g, color.r),
             // Fallback para BGR
             _ => (color.b, color.g, color.r),
         };

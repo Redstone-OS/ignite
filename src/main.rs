@@ -126,12 +126,21 @@ pub extern "efiapi" fn efi_main(image_handle: Handle, system_table: *mut SystemT
         let fb_ptr = fb_info.addr;
 
         let ui_fb_info = HandoffFbInfo {
-            address: fb_info.addr,
-            size:    fb_info.size,
-            width:   fb_info.width,
-            height:  fb_info.height,
-            stride:  fb_info.stride,
-            format:  fb_info.format as u32,
+            addr:   fb_info.addr,
+            size:   fb_info.size as u64,
+            width:  fb_info.width,
+            height: fb_info.height,
+            stride: fb_info.stride,
+            format: match fb_info.format {
+                ignite::video::PixelFormat::RgbReserved8Bit => {
+                    ignite::core::handoff::PixelFormat::Rgb
+                },
+                ignite::video::PixelFormat::BgrReserved8Bit => {
+                    ignite::core::handoff::PixelFormat::Bgr
+                },
+                ignite::video::PixelFormat::Bitmask => ignite::core::handoff::PixelFormat::Bitmask,
+                ignite::video::PixelFormat::BltOnly => ignite::core::handoff::PixelFormat::BltOnly,
+            },
         };
 
         let mut menu = Menu::new(&config);
@@ -475,6 +484,3 @@ fn panic(info: &core::panic::PanicInfo) -> ! {
 fn alloc_error(_layout: core::alloc::Layout) -> ! {
     panic!("Out of Memory (OOM)");
 }
-
-
-

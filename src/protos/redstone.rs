@@ -36,12 +36,12 @@ impl<'a> RedstoneProtocol<'a> {
     fn prepare_framebuffer(&self) -> FramebufferInfo {
         // Stub seguro
         FramebufferInfo {
-            address: 0,
-            size:    0,
-            width:   0,
-            height:  0,
-            stride:  0,
-            format:  0,
+            addr:   0,
+            size:   0,
+            width:  0,
+            height: 0,
+            stride: 0,
+            format: crate::core::handoff::PixelFormat::Rgb,
         }
     }
 }
@@ -87,8 +87,29 @@ impl<'a> BootProtocol for RedstoneProtocol<'a> {
             (0, 0)
         };
 
-        // Construir BootInfo
-        // TODO: Preencher BootInfo
+        // Construir BootInfo e escrever na memória alocada
+        let boot_info = BootInfo {
+            magic:   crate::core::handoff::BOOT_INFO_MAGIC,
+            version: crate::core::handoff::BOOT_INFO_VERSION,
+
+            framebuffer: fb_info,
+
+            memory_map_addr: 0, // TODO: Passar mapa de memória real
+            memory_map_len:  0,
+
+            rsdp_addr: 0, // TODO: Buscar RSDP do ACPI
+
+            kernel_phys_addr: loaded_kernel.base_address,
+            kernel_size:      loaded_kernel.size,
+
+            initramfs_addr: initrd_addr,
+            initramfs_size: initrd_size,
+        };
+
+        // CRÍTICO: Escrever o BootInfo no ponteiro alocado
+        unsafe {
+            core::ptr::write(boot_info_ptr, boot_info);
+        }
 
         Ok(KernelLaunchInfo {
             entry_point: loaded_kernel.entry_point,

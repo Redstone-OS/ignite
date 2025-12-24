@@ -8,45 +8,47 @@
 //! 2. Versionamento é obrigatório (`version` field) para evitar
 //!    incompatibilidades.
 //! 3. Sem tipos complexos do Rust (Vec, String). Apenas primitivos e ponteiros.
+//!
+//! IMPORTANTE: Esta estrutura DEVE estar 100% sincronizada com
+//! forge/src/core/handoff.rs
 
 use core::fmt;
 
-/// Assinatura mágica para validar que o BootInfo é legítimo ("IGNITE!" em
+/// Assinatura mágica para validar que o BootInfo é legítimo ("REDSTONE" em
 /// ASCII).
-pub const BOOT_INFO_MAGIC: u64 = 0x2145_5449_4E47_4900;
+pub const BOOT_INFO_MAGIC: u64 = 0x524544_53544F4E45;
 
 /// Versão atual da estrutura de BootInfo. Incrementar se mudar o layout.
-pub const BOOT_INFO_VERSION: u64 = 1;
+pub const BOOT_INFO_VERSION: u32 = 1;
 
 /// Informações completas de Boot entregues ao Kernel.
+/// DEVE corresponder EXATAMENTE a forge/src/core/handoff.rs::BootInfo
 #[repr(C)]
-#[derive(Debug, Clone)]
+#[derive(Debug, Clone, Copy)]
 pub struct BootInfo {
     /// Assinatura mágica (deve ser verificada pelo Kernel).
-    pub magic:   u64,
-    /// Versão da estrutura.
-    pub version: u64,
+    pub magic: u64,
 
-    /// Informações sobre a memória física (RAM).
-    pub memory: MemoryInfo,
+    /// Versão do protocolo de boot.
+    pub version: u32,
 
-    /// Informações sobre o Framebuffer de vídeo (GOP).
+    /// Informações de vídeo (GOP).
     pub framebuffer: FramebufferInfo,
 
-    /// Informações sobre o Kernel carregado.
-    pub kernel: KernelInfo,
+    /// Mapa de memória física.
+    pub memory_map_addr: u64,
+    pub memory_map_len:  u64,
 
-    /// Endereço do InitRamdisk (se houver).
-    pub initrd_addr: u64,
-    /// Tamanho do InitRamdisk.
-    pub initrd_size: u64,
-
-    /// Ponteiro para a tabela ACPI RSDP (Root System Description Pointer).
+    /// Tabela ACPI RSDP (Root System Description Pointer).
     pub rsdp_addr: u64,
 
-    /// Ponteiro para a tabela do sistema UEFI (para acesso a Runtime Services).
-    /// O Kernel deve mapear isso corretamente se quiser usar variáveis NVRAM.
-    pub uefi_system_table: u64,
+    /// Localização física do Kernel.
+    pub kernel_phys_addr: u64,
+    pub kernel_size:      u64,
+
+    /// Endereço do Initramfs (se carregado).
+    pub initramfs_addr: u64,
+    pub initramfs_size: u64,
 }
 
 /// Detalhes sobre o Framebuffer Gráfico.
@@ -54,20 +56,67 @@ pub struct BootInfo {
 #[derive(Debug, Clone, Copy)]
 pub struct FramebufferInfo {
     /// Endereço físico do buffer de pixels.
-    pub address: u64,
+    pub addr:   u64,
     /// Tamanho total em bytes.
-    pub size:    usize,
+    pub size:   u64,
     /// Largura em pixels.
-    pub width:   u32,
+    pub width:  u32,
     /// Altura em pixels.
-    pub height:  u32,
+    pub height: u32,
     /// Pixels por linha (stride).
-    pub stride:  u32,
-    /// Formato de pixel (ver enum PixelFormat no módulo video).
-    pub format:  u32,
+    pub stride: u32,
+    /// Formato de pixel (como u32 para compatibilidade C).
+    pub format: PixelFormat,
 }
 
-/// Detalhes sobre o Kernel carregado.
+#[repr(u32)]
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub enum PixelFormat {
+    Rgb = 0,
+    Bgr = 1,
+    Bitmask = 2,
+    BltOnly = 3,
+}
+
+/// Entrada do mapa de memória física
+#[repr(C)]
+#[derive(Debug, Clone, Copy)]
+pub struct MemoryMapEntry {
+    pub base: u64,
+    pub len:  u64,
+    pub typ:  MemoryType,
+}
+
+#[repr(u32)]
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub enum MemoryType {
+    Usable = 1,
+    Reserved = 2,
+    AcpiReclaimable = 3,
+    AcpiNvs = 4,
+    BadMemory = 5,
+    BootloaderReclaimable = 6,
+    KernelAndModules = 7,
+    Framebuffer = 8,
+}
+
+// =============================================================================
+// Estruturas antigas (deprecated - mantidas para compatibilidade temporária)
+// =============================================================================
+
+/// Resumo do mapa de memória (LEGACY - não usar)
+#[repr(C)]
+#[derive(Debug, Clone)]
+pub struct MemoryInfo {
+    /// Ponteiro para o array de regiões de memória.
+    pub map_addr:       u64,
+    /// Número de entradas no mapa.
+    pub map_count:      usize,
+    /// Endereço físico da Tabela de Páginas (PML4/CR3) ativa.
+    pub page_table_cr3: u64,
+}
+
+/// Detalhes sobre o Kernel carregado (LEGACY - não usar)
 #[repr(C)]
 #[derive(Debug, Clone, Copy)]
 pub struct KernelInfo {
@@ -81,16 +130,4 @@ pub struct KernelInfo {
     pub stack_base:  u64,
     /// Tamanho da Stack.
     pub stack_size:  u64,
-}
-
-/// Resumo do mapa de memória.
-#[repr(C)]
-#[derive(Debug, Clone)]
-pub struct MemoryInfo {
-    /// Ponteiro para o array de regiões de memória.
-    pub map_addr:       u64,
-    /// Número de entradas no mapa.
-    pub map_count:      usize,
-    /// Endereço físico da Tabela de Páginas (PML4/CR3) ativa.
-    pub page_table_cr3: u64,
 }
