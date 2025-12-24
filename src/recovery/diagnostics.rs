@@ -28,12 +28,12 @@ impl Diagnostics {
         // Instancia um loader temporário para verificar arquivos
         let mut loader = FileLoader::new(fs);
 
-        // 1. Verificar existência do Kernel (Crítico)
+        // 1. Verificar existência do Kernel
         if !loader.file_exists(&entry.path) {
             crate::println!("FALHA: Kernel '{}' não encontrado.", entry.path);
             return HealthStatus::Critical("Arquivo do Kernel ausente");
         }
-        crate::println!("OK: Kernel encontrado.");
+        crate::println!("[92m[1m[OK][0m Kernel encontrado.");
 
         // 2. Verificar Módulos (Aviso)
         for module in &entry.modules {

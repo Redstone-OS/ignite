@@ -71,12 +71,7 @@ impl<'a, A: FrameAllocator + ?Sized> ElfLoader<'a, A> {
             let total_bytes_needed = (virt_end - virt_page_start) as usize;
             let pages_needed = (total_bytes_needed + (PAGE_SIZE as usize - 1)) / PAGE_SIZE as usize;
 
-            log::debug!(
-                "Carregando segmento: virt={:#x}, tamanho={:#x} ({} páginas)",
-                virt_start,
-                ph.p_memsz,
-                pages_needed
-            );
+            // Log de debug removido para output limpo
 
             // 1. Alocar memória física
             let phys_addr = self.allocator.allocate_frame(pages_needed)?;
@@ -125,11 +120,11 @@ impl<'a, A: FrameAllocator + ?Sized> ElfLoader<'a, A> {
         let entry_point = elf.entry;
 
         crate::println!(
-            "[OK] Kernel carregado. Entry point virtual: {:#x}",
+            "[92m[1m[OK][0m Kernel carregado. Entry point virtual: {:#x}",
             entry_point
         );
-        log::info!(
-            "Memória física ocupada: {:#x} - {:#x}",
+        crate::println!(
+            "[92m[1m[OK][0m Memória física ocupada: {:#x} - {:#x}",
             kernel_phys_start,
             kernel_phys_end
         );
@@ -141,3 +136,6 @@ impl<'a, A: FrameAllocator + ?Sized> ElfLoader<'a, A> {
         })
     }
 }
+
+
+

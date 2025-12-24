@@ -61,7 +61,7 @@ pub extern "efiapi" fn efi_main(image_handle: Handle, system_table: *mut SystemT
 
         ALLOCATOR.init(heap_start as usize, heap_size);
     }
-    ignite::println!("[OK] Heap inicializada.");
+    ignite::println!("[92m[1m[OK][0m Heap inicializada.");
 
     // 3. Configurar Sistema de Arquivos de Boot (ESP)
     let bs = uefi::system_table().boot_services();
@@ -198,7 +198,7 @@ pub extern "efiapi" fn efi_main(image_handle: Handle, system_table: *mut SystemT
         .expect("FALHA CRITICA: Nao foi possivel alocar memoria UEFI para o kernel");
 
     ignite::println!(
-        "[OK] Buffer UEFI alocado em: 0x{:X}",
+        "[92m[1m[OK][0m Buffer UEFI alocado em: 0x{:X}",
         kernel_buffer_ptr as u64
     );
 
@@ -355,12 +355,12 @@ unsafe extern "C" fn jump_to_kernel(
 ) -> ! {
     if use_fixed {
         // Protocolo Redstone: jump fixo para 0xffffffff80000000
-        ignite::println!("[DEBUG] Saltando para o kernel via jump_to_kernel_redstone");
+        ignite::println!("[95m[1m[DEBUG][0m Saltando para o kernel via jump_to_kernel_redstone");
         jump_to_kernel_redstone(stack, arg1, arg2, arg3, arg4, cr3)
     } else {
         // Outros protocolos: jump dinâmico
         ignite::println!(
-            "[DEBUG] Usando jump_to_kernel_generic (entry=0x{:X})",
+            "[95m[1m[DEBUG][0m Usando jump_to_kernel_generic (entry=0x{:X})",
             entry
         );
         jump_to_kernel_generic(entry, stack, arg1, arg2, arg3, arg4, cr3)
@@ -475,3 +475,6 @@ fn panic(info: &core::panic::PanicInfo) -> ! {
 fn alloc_error(_layout: core::alloc::Layout) -> ! {
     panic!("Out of Memory (OOM)");
 }
+
+
+
