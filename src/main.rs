@@ -220,11 +220,53 @@ pub extern "efiapi" fn efi_main(image_handle: Handle, system_table: *mut SystemT
     ignite::fs::read_exact(kernel_file.as_mut(), kernel_data)
         .expect("Erro de I/O ao ler Kernel para buffer UEFI");
 
+    // 8.6: Carregar Módulos (InitRD, Drivers)
+    let mut loaded_modules = alloc::vec::Vec::new();
+    for module_cfg in &selected_entry.modules {
+        ignite::println!("Carregando modulo: {}", module_cfg.path);
+
+        let mut module_file = root_dir
+            .open_file(&module_cfg.path)
+            .expect("FALHA: Modulo nao encontrado no disco");
+
+        let mod_meta = module_file
+            .metadata()
+            .expect("Falha ao obter metadata do modulo");
+        let mod_size = mod_meta.size as usize;
+
+        ignite::println!("Tamanho: {} bytes ({} KB)", mod_size, mod_size / 1024);
+
+        if mod_size == 0 {
+            ignite::println!("AVISO: Modulo vazio ignorado.");
+            continue;
+        }
+
+        let mod_buffer_ptr = bs
+            .allocate_pool(uefi::table::boot::MemoryType::LoaderData, mod_size)
+            .expect("FALHA CRITICA: OOM ao alocar memoria para modulo");
+
+        let mod_data: &mut [u8] =
+            unsafe { core::slice::from_raw_parts_mut(mod_buffer_ptr as *mut u8, mod_size) };
+
+        ignite::fs::read_exact(module_file.as_mut(), mod_data).expect("Erro de I/O ao ler modulo");
+
+        loaded_modules.push(ignite::core::types::LoadedFile {
+            ptr:  mod_buffer_ptr as u64,
+            size: mod_size,
+        });
+
+        ignite::println!(
+            "[92m[1m[OK][0m Modulo carregado em: 0x{:X}",
+            mod_buffer_ptr as u64
+        );
+    }
+
     // 9. Segurança
     let policy = SecurityPolicy::new(&config);
     if let Err(e) = validate_and_measure(&kernel_data, &selected_entry.name, &policy) {
         panic!("Violacao de Seguranca detectada: {:?}", e);
     }
+    // TODO: Validar módulos também
 
     // 10. Executar Protocolo de Boot
     // RAMIFICAÇÃO: Chainload vs Kernel Nativo
@@ -287,7 +329,7 @@ pub extern "efiapi" fn efi_main(image_handle: Handle, system_table: *mut SystemT
         &mut page_table,
         &kernel_data,
         selected_entry.cmdline.as_deref(),
-        alloc::vec![],
+        loaded_modules,
         memory_map_buffer, // Passa o memory map
     )
     .expect("Falha ao preparar Kernel (Protocol Error)");
