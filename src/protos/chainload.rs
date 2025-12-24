@@ -25,6 +25,7 @@ impl BootProtocol for ChainloadProtocol {
         _kernel_file: &[u8],
         _cmdline: Option<&str>,
         _modules: Vec<LoadedFile>,
+        _memory_map_buffer: (u64, u64),
     ) -> Result<KernelLaunchInfo> {
         // O Chainload em UEFI é especial: ele não retorna LaunchInfo para um salto
         // manual. Ele usa BS->LoadImage e BS->StartImage.

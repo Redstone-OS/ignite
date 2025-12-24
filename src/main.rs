@@ -278,12 +278,17 @@ pub extern "efiapi" fn efi_main(image_handle: Handle, system_table: *mut SystemT
     let mut page_table =
         PageTableManager::new(&mut frame_allocator).expect("Falha ao criar PageTables");
 
+    // CRÍTICO: Capturar Memory Map ANTES de exit_boot_services
+    // O kernel precisa saber quais regiões de memória estão disponíveis
+    let memory_map_buffer = capture_memory_map(bs);
+
     let launch_info = load_any(
         &mut frame_allocator,
         &mut page_table,
         &kernel_data,
         selected_entry.cmdline.as_deref(),
         alloc::vec![],
+        memory_map_buffer, // Passa o memory map
     )
     .expect("Falha ao preparar Kernel (Protocol Error)");
 
@@ -348,6 +353,98 @@ fn get_memory_map_key(
 
     // Retorna o mapa de memória e um iterador vazio
     (map_key, core::iter::empty())
+}
+
+/// Captura o Memory Map do UEFI em um buffer persistente.
+/// Retorna (ponteiro, contagem de entradas).
+fn capture_memory_map(bs: &ignite::uefi::BootServices) -> (u64, u64) {
+    use ignite::core::handoff::MemoryMapEntry;
+
+    let mut map_size = 0;
+    let mut map_key = 0;
+    let mut descriptor_size = 0;
+    let mut descriptor_version = 0;
+
+    // 1. Descobrir tamanho necessário
+    let _ = (bs.get_memory_map_f)(
+        &mut map_size,
+        core::ptr::null_mut(),
+        &mut map_key,
+        &mut descriptor_size,
+        &mut descriptor_version,
+    );
+
+    // 2. Alocar buffer (com margem de segurança)
+    map_size += descriptor_size * 10;
+    let buffer_ptr = bs
+        .allocate_pool(ignite::uefi::table::boot::MemoryType::LoaderData, map_size)
+        .expect("Falha ao alocar buffer para memory map");
+
+    // 3. Obter memory map real
+    let status = (bs.get_memory_map_f)(
+        &mut map_size,
+        buffer_ptr as *mut ignite::uefi::table::boot::MemoryDescriptor,
+        &mut map_key,
+        &mut descriptor_size,
+        &mut descriptor_version,
+    );
+
+    if status.is_error() {
+        ignite::println!("AVISO: Falha ao capturar memory map!");
+        return (0, 0);
+    }
+
+    // 4. Converter entradas UEFI para formato do Forge
+    let num_descriptors = map_size / descriptor_size;
+
+    // Alocar array de MemoryMapEntry
+    let entries_size = num_descriptors * core::mem::size_of::<MemoryMapEntry>();
+    let entries_ptr = bs
+        .allocate_pool(
+            ignite::uefi::table::boot::MemoryType::LoaderData,
+            entries_size,
+        )
+        .expect("Falha ao alocar array de memory map") as *mut MemoryMapEntry;
+
+    let uefi_descriptors = unsafe {
+        core::slice::from_raw_parts(
+            buffer_ptr as *const ignite::uefi::table::boot::MemoryDescriptor,
+            num_descriptors,
+        )
+    };
+
+    let forge_entries = unsafe { core::slice::from_raw_parts_mut(entries_ptr, num_descriptors) };
+
+    // 5. Converter cada entrada
+    for (i, desc) in uefi_descriptors.iter().enumerate() {
+        use ignite::uefi::table::boot::MemoryType;
+
+        forge_entries[i] = MemoryMapEntry {
+            base: desc.physical_start,
+            len:  desc.number_of_pages * 4096,
+            typ:  match desc.ty {
+                ty if ty == MemoryType::ConventionalMemory as u32 => {
+                    ignite::core::handoff::MemoryType::Usable
+                },
+                ty if ty == MemoryType::LoaderData as u32
+                    || ty == MemoryType::LoaderCode as u32 =>
+                {
+                    ignite::core::handoff::MemoryType::BootloaderReclaimable
+                },
+                ty if ty == MemoryType::ACPIReclaimMemory as u32 => {
+                    ignite::core::handoff::MemoryType::AcpiReclaimable
+                },
+                ty if ty == MemoryType::ACPIMemoryNVS as u32 => {
+                    ignite::core::handoff::MemoryType::AcpiNvs
+                },
+                _ => ignite::core::handoff::MemoryType::Reserved,
+            },
+        };
+    }
+
+    ignite::println!("Memory map capturado: {} entradas", num_descriptors);
+
+    (entries_ptr as u64, num_descriptors as u64)
 }
 
 /// Jump para o kernel: escolhe entre Redstone (fixo) ou genérico (dinâmico).

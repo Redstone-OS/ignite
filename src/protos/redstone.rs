@@ -61,6 +61,7 @@ impl<'a> BootProtocol for RedstoneProtocol<'a> {
         kernel_file: &[u8],
         _cmdline: Option<&str>,
         modules: Vec<LoadedFile>,
+        memory_map_buffer: (u64, u64),
     ) -> Result<KernelLaunchInfo> {
         // 1. Carregar segmentos ELF
         let mut loader = ElfLoader::new(self.allocator, self.page_table);
@@ -94,8 +95,8 @@ impl<'a> BootProtocol for RedstoneProtocol<'a> {
 
             framebuffer: fb_info,
 
-            memory_map_addr: 0, // TODO: Passar mapa de memória real
-            memory_map_len:  0,
+            memory_map_addr: memory_map_buffer.0, // Ponteiro do memory map
+            memory_map_len:  memory_map_buffer.1, // Contagem de entradas
 
             rsdp_addr: 0, // TODO: Buscar RSDP do ACPI
 

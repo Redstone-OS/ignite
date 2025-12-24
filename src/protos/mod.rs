@@ -56,6 +56,7 @@ pub trait BootProtocol {
         kernel_file: &[u8],
         cmdline: Option<&str>,
         modules: Vec<LoadedFile>,
+        memory_map_buffer: (u64, u64),
     ) -> Result<KernelLaunchInfo>;
 }
 
@@ -66,6 +67,7 @@ pub fn load_any(
     kernel_file: &[u8],
     cmdline: Option<&str>,
     modules: Vec<LoadedFile>,
+    memory_map_buffer: (u64, u64), // (ponteiro, contagem)
 ) -> Result<KernelLaunchInfo> {
     // Lista de protocolos suportados
     // Nota: Em um sistema real, você instanciaria isso de forma mais dinâmica
@@ -74,29 +76,25 @@ pub fn load_any(
     // 1. Tentar Protocolo Nativo (Redstone/ELF)
     let mut redstone = redstone::RedstoneProtocol::new(allocator, page_table);
     if redstone.identify(kernel_file) {
-        crate::println!("[92m[1m[OK][0m Detectado Kernel Redstone/ELF.");
-        return redstone.load(kernel_file, cmdline, modules);
+        crate::println!("[OK] Detectado Kernel Redstone/ELF.");
+        return redstone.load(kernel_file, cmdline, modules, memory_map_buffer);
     }
 
     // 2. Tentar Linux
     let mut linux = linux::LinuxProtocol::new(allocator);
     if linux.identify(kernel_file) {
         crate::println!("Detectado Kernel Linux (bzImage).");
-        return linux.load(kernel_file, cmdline, modules);
+        return linux.load(kernel_file, cmdline, modules, memory_map_buffer);
     }
 
     // 3. Tentar Multiboot2
     let mut mb2 = multiboot2::Multiboot2Protocol::new(allocator);
     if mb2.identify(kernel_file) {
         crate::println!("Detectado Kernel Multiboot2.");
-        return mb2.load(kernel_file, cmdline, modules);
+        return mb2.load(kernel_file, cmdline, modules, memory_map_buffer);
     }
 
     Err(crate::core::error::BootError::Generic(
         "Formato de kernel desconhecido",
     ))
 }
-
-
-
-
