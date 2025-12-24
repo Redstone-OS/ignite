@@ -406,22 +406,107 @@ fn capture_memory_map(bs: &ignite::uefi::BootServices) -> (u64, u64) {
         )
         .expect("Falha ao alocar array de memory map") as *mut MemoryMapEntry;
 
-    let uefi_descriptors = unsafe {
-        core::slice::from_raw_parts(
-            buffer_ptr as *const ignite::uefi::table::boot::MemoryDescriptor,
-            num_descriptors,
-        )
-    };
-
     let forge_entries = unsafe { core::slice::from_raw_parts_mut(entries_ptr, num_descriptors) };
 
-    // 5. Converter cada entrada
-    for (i, desc) in uefi_descriptors.iter().enumerate() {
+    // ============================================================
+    // DEBUG: Ative (true) ou desative (false) o log detalhado
+    // ============================================================
+    const DEBUG_MEMORY_MAP: bool = false;
+
+    // 5. Converter cada entrada - IMPORTANTE: usar descriptor_size, não sizeof!
+    let mut valid_entries = 0;
+    let mut total_usable_ram: u64 = 0;
+    let mut max_ram_address: u64 = 0;
+
+    if DEBUG_MEMORY_MAP {
+        ignite::println!("=== DEBUG: Analisando Memory Map UEFI ===");
+        ignite::println!("Descriptor size: {} bytes", descriptor_size);
+    }
+
+    // Iterar manualmente usando descriptor_size (pode ser maior que
+    // sizeof(MemoryDescriptor))
+    for i in 0..num_descriptors {
         use ignite::uefi::table::boot::MemoryType;
 
-        forge_entries[i] = MemoryMapEntry {
+        // Calcular ponteiro para esta entrada usando descriptor_size
+        let desc_ptr = unsafe {
+            (buffer_ptr as *const u8).add(i * descriptor_size)
+                as *const ignite::uefi::table::boot::MemoryDescriptor
+        };
+        let desc = unsafe { &*desc_ptr };
+
+        // Validação: Ignorar entradas claramente corrompidas
+        const MAX_REASONABLE_ADDR: u64 = 1024 * 1024 * 1024 * 1024; // 1 TB
+        const MAX_REGION_SIZE: u64 = 128 * 1024 * 1024 * 1024; // 128 GB por região
+
+        if desc.physical_start > MAX_REASONABLE_ADDR {
+            if DEBUG_MEMORY_MAP {
+                ignite::println!(
+                    "  [{:3}] IGNORADO: Base address absurdo ({:#x})",
+                    i,
+                    desc.physical_start
+                );
+            }
+            continue;
+        }
+
+        if desc.number_of_pages == 0 {
+            if DEBUG_MEMORY_MAP {
+                ignite::println!("  [{:3}] IGNORADO: Região vazia", i);
+            }
+            continue;
+        }
+
+        // Validar que o tamanho também é razoável
+        let size = desc.number_of_pages * 4096;
+        if size > MAX_REGION_SIZE {
+            if DEBUG_MEMORY_MAP {
+                ignite::println!(
+                    "  [{:3}] IGNORADO: Tamanho absurdo ({} MB)",
+                    i,
+                    size / (1024 * 1024)
+                );
+            }
+            continue;
+        }
+
+        // Debug detalhado (se ativado)
+        if DEBUG_MEMORY_MAP {
+            let type_name = match desc.ty {
+                ty if ty == MemoryType::ConventionalMemory as u32 => "ConventionalMemory",
+                ty if ty == MemoryType::LoaderData as u32 => "LoaderData",
+                ty if ty == MemoryType::LoaderCode as u32 => "LoaderCode",
+                ty if ty == MemoryType::BootServicesData as u32 => "BootServicesData",
+                ty if ty == MemoryType::BootServicesCode as u32 => "BootServicesCode",
+                ty if ty == MemoryType::ACPIReclaimMemory as u32 => "ACPIReclaim",
+                ty if ty == MemoryType::ACPIMemoryNVS as u32 => "ACPINVS",
+                _ => "Other",
+            };
+
+            ignite::println!(
+                "  [{:3}] {:20} Base:{:#016x} Pages:{:#010x} Size:{} MB",
+                i,
+                type_name,
+                desc.physical_start,
+                desc.number_of_pages,
+                size / (1024 * 1024)
+            );
+        }
+
+        // Contabilizar RAM usável E calcular endereço máximo APENAS com RAM real
+        if desc.ty == MemoryType::ConventionalMemory as u32 {
+            total_usable_ram += size;
+
+            // Calcular endereço máximo APENAS da RAM utilizável
+            let end = desc.physical_start + size;
+            if end > max_ram_address {
+                max_ram_address = end;
+            }
+        }
+
+        forge_entries[valid_entries] = MemoryMapEntry {
             base: desc.physical_start,
-            len:  desc.number_of_pages * 4096,
+            len:  size,
             typ:  match desc.ty {
                 ty if ty == MemoryType::ConventionalMemory as u32 => {
                     ignite::core::handoff::MemoryType::Usable
@@ -440,11 +525,19 @@ fn capture_memory_map(bs: &ignite::uefi::BootServices) -> (u64, u64) {
                 _ => ignite::core::handoff::MemoryType::Reserved,
             },
         };
+
+        valid_entries += 1;
     }
 
-    ignite::println!("Memory map capturado: {} entradas", num_descriptors);
+    // Sempre mostrar resumo
+    ignite::println!("Memory map: {} entradas válidas", valid_entries);
+    ignite::println!(
+        "RAM utilizável: {} MB ({} GB)",
+        total_usable_ram / (1024 * 1024),
+        total_usable_ram / (1024 * 1024 * 1024)
+    );
 
-    (entries_ptr as u64, num_descriptors as u64)
+    (entries_ptr as u64, valid_entries as u64)
 }
 
 /// Jump para o kernel: escolhe entre Redstone (fixo) ou genérico (dinâmico).
