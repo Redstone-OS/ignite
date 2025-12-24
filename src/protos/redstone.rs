@@ -66,11 +66,18 @@ impl<'a> BootProtocol for RedstoneProtocol<'a> {
         let mut loader = ElfLoader::new(self.allocator, self.page_table);
         let loaded_kernel = loader.load_kernel(kernel_file)?;
 
-        // Alocar BootInfo
+        // 2. CRÍTICO: Identity map dos primeiros 4GiB
+        // Sem isso, o bootloader crasha ao trocar CR3 pois o código
+        // do próprio bootloader fica inacessível!
+        self.page_table
+            .identity_map_4gib(self.allocator)
+            .expect("Falha ao criar identity map");
+
+        // 3. Alocar BootInfo
         let boot_info_phys = self.allocator.allocate_frame(1)?;
         let boot_info_ptr = boot_info_phys as *mut BootInfo;
 
-        // 3. Preencher BootInfo
+        // 4. Preencher BootInfo
         let fb_info = self.prepare_framebuffer();
 
         // InitRD
@@ -84,12 +91,13 @@ impl<'a> BootProtocol for RedstoneProtocol<'a> {
         // TODO: Preencher BootInfo
 
         Ok(KernelLaunchInfo {
-            entry_point:   loaded_kernel.entry_point,
+            entry_point: loaded_kernel.entry_point,
+            use_fixed_redstone_entry: true, // Protocolo Redstone usa jump fixo
             stack_pointer: None,
-            rdi:           boot_info_phys,
-            rsi:           0,
-            rdx:           0,
-            rbx:           0,
+            rdi: boot_info_phys,
+            rsi: 0,
+            rdx: 0,
+            rbx: 0,
         })
     }
 }

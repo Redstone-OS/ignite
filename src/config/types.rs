@@ -93,6 +93,7 @@ pub struct Module {
 pub enum Protocol {
     Linux,
     Limine,
+    Redstone,
     EfiChainload,
     Multiboot2,
     Unknown,
@@ -103,9 +104,9 @@ impl From<&str> for Protocol {
         match s.to_lowercase().as_str() {
             "linux" => Protocol::Linux,
             "limine" => Protocol::Limine,
+            "redstone" | "native" => Protocol::Redstone,
             "efi" | "chainload" => Protocol::EfiChainload,
             "multiboot2" => Protocol::Multiboot2,
-            "redstone" | "native" => Protocol::Limine,
             _ => Protocol::Unknown,
         }
     }

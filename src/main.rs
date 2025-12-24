@@ -61,7 +61,7 @@ pub extern "efiapi" fn efi_main(image_handle: Handle, system_table: *mut SystemT
 
         ALLOCATOR.init(heap_start as usize, heap_size);
     }
-    ignite::println!("Heap inicializada.");
+    ignite::println!("[OK] Heap inicializada.");
 
     // 3. Configurar Sistema de Arquivos de Boot (ESP)
     let bs = uefi::system_table().boot_services();
@@ -197,7 +197,10 @@ pub extern "efiapi" fn efi_main(image_handle: Handle, system_table: *mut SystemT
         .allocate_pool(uefi::table::boot::MemoryType::LoaderData, kernel_size)
         .expect("FALHA CRITICA: Nao foi possivel alocar memoria UEFI para o kernel");
 
-    ignite::println!("Buffer UEFI alocado em: 0x{:X}", kernel_buffer_ptr as u64);
+    ignite::println!(
+        "[OK] Buffer UEFI alocado em: 0x{:X}",
+        kernel_buffer_ptr as u64
+    );
 
     // 8.4: Criar slice Rust do buffer UEFI (unsafe: confiamos que UEFI alocou
     // corretamente)
@@ -300,6 +303,7 @@ pub extern "efiapi" fn efi_main(image_handle: Handle, system_table: *mut SystemT
     unsafe {
         jump_to_kernel(
             launch_info.entry_point,
+            launch_info.use_fixed_redstone_entry,
             launch_info.stack_pointer.unwrap_or(0),
             launch_info.rdi,
             launch_info.rsi,
@@ -337,8 +341,88 @@ fn get_memory_map_key(
     (map_key, core::iter::empty())
 }
 
+/// Jump para o kernel: escolhe entre Redstone (fixo) ou genérico (dinâmico).
 #[no_mangle]
 unsafe extern "C" fn jump_to_kernel(
+    entry: u64,
+    use_fixed: bool,
+    stack: u64,
+    arg1: u64,
+    arg2: u64,
+    arg3: u64,
+    arg4: u64,
+    cr3: u64,
+) -> ! {
+    if use_fixed {
+        // Protocolo Redstone: jump fixo para 0xffffffff80000000
+        ignite::println!("[DEBUG] Saltando para o kernel via jump_to_kernel_redstone");
+        jump_to_kernel_redstone(stack, arg1, arg2, arg3, arg4, cr3)
+    } else {
+        // Outros protocolos: jump dinâmico
+        ignite::println!(
+            "[DEBUG] Usando jump_to_kernel_generic (entry=0x{:X})",
+            entry
+        );
+        jump_to_kernel_generic(entry, stack, arg1, arg2, arg3, arg4, cr3)
+    }
+}
+
+/// Jump FIXO para Kernel Redstone (0xffffffff80000000).
+/// Usado exclusivamente para protocol: redstone no ignite.cfg.
+///
+/// O kernel Forge sempre está neste endereço por convenção do linker script.
+#[no_mangle]
+unsafe extern "C" fn jump_to_kernel_redstone(
+    stack: u64,
+    arg1: u64,
+    arg2: u64,
+    arg3: u64,
+    arg4: u64,
+    cr3: u64,
+) -> ! {
+    // Endereço fixo do kernel Forge (convenção Redstone OS)
+    const REDSTONE_KERNEL_ENTRY: u64 = 0xffffffff80000000;
+
+    core::arch::asm!(
+        "cli",
+
+        // Carregar CR3 (page table)
+        "mov rax, {cr3}",
+        "mov cr3, rax",
+
+        // Configurar stack se fornecida
+        "test {stack}, {stack}",
+        "je 2f",
+        "mov rsp, {stack}",
+        "xor rbp, rbp",
+        "2:",
+
+        // System V AMD64 ABI
+        "mov rdi, {arg1}",
+        "mov rsi, {arg2}",
+        "mov rdx, {arg3}",
+        "mov rbx, {arg4}",
+
+        // Jump FIXO para o kernel Redstone
+        "mov rax, {redstone_entry}",
+        "jmp rax",
+
+        redstone_entry = const REDSTONE_KERNEL_ENTRY,
+        stack = in(reg) stack,
+        arg1 = in(reg) arg1,
+        arg2 = in(reg) arg2,
+        arg3 = in(reg) arg3,
+        arg4 = in(reg) arg4,
+        cr3 = in(reg) cr3,
+
+        options(noreturn)
+    );
+}
+
+/// Jump GENÉRICO para kernels (Linux, Multiboot2, etc).
+/// Usa o entry_point fornecido dinamicamente pelo protocolo.
+#[no_mangle]
+unsafe extern "C" fn jump_to_kernel_generic(
     entry: u64,
     stack: u64,
     arg1: u64,
@@ -349,18 +433,27 @@ unsafe extern "C" fn jump_to_kernel(
 ) -> ! {
     core::arch::asm!(
         "cli",
-        "mov cr3, {cr3}",
-        "cmp {stack}, 0",
+
+        // Carregar CR3
+        "mov rax, {cr3}",
+        "mov cr3, rax",
+
+        // Configurar stack
+        "test {stack}, {stack}",
         "je 2f",
         "mov rsp, {stack}",
-        "mov rbp, 0",
+        "xor rbp, rbp",
         "2:",
+
+        // System V AMD64 ABI
         "mov rdi, {arg1}",
         "mov rsi, {arg2}",
         "mov rdx, {arg3}",
-        "mov rcx, {arg4}",
         "mov rbx, {arg4}",
+
+        // Jump dinâmico baseado em entry_point
         "jmp {entry}",
+
         entry = in(reg) entry,
         stack = in(reg) stack,
         arg1 = in(reg) arg1,
@@ -368,6 +461,7 @@ unsafe extern "C" fn jump_to_kernel(
         arg3 = in(reg) arg3,
         arg4 = in(reg) arg4,
         cr3 = in(reg) cr3,
+
         options(noreturn)
     );
 }

@@ -61,6 +61,76 @@ impl PageTableManager {
         Ok(())
     }
 
+    /// Mapeia os primeiros 4GiB de memória física usando huge pages (2MiB).
+    /// CRITICO: Necessário para o bootloader não crashar ao trocar CR3.
+    /// O bootloader está executando em endereços baixos (< 4GiB) e ao
+    /// trocar para a tabela do kernel, precisamos garantir que o código
+    /// do bootloader continue acessível.
+    pub fn identity_map_4gib(
+        &mut self,
+        allocator: &mut (impl FrameAllocator + ?Sized),
+    ) -> Result<()> {
+        const SIZE_4GIB: u64 = 0x1_0000_0000;
+        const SIZE_2MIB: u64 = 0x20_0000;
+
+        // Mapear de 0 até 4GiB usando páginas de 2MiB
+        let mut phys = 0u64;
+        while phys < SIZE_4GIB {
+            self.map_huge_page(phys, phys, PAGE_PRESENT | PAGE_WRITABLE, allocator)?;
+            phys += SIZE_2MIB;
+        }
+
+        Ok(())
+    }
+
+    /// Mapeia uma huge page (2MiB).
+    fn map_huge_page(
+        &mut self,
+        phys: u64,
+        virt: u64,
+        flags: u64,
+        allocator: &mut (impl FrameAllocator + ?Sized),
+    ) -> Result<()> {
+        let pml4_idx = ((virt >> 39) & 0x1FF) as usize;
+        let pdpt_idx = ((virt >> 30) & 0x1FF) as usize;
+        let pd_idx = ((virt >> 21) & 0x1FF) as usize;
+
+        let pml4 = unsafe { &mut *(self.pml4_phys_addr as *mut [u64; 512]) };
+
+        // Obter ou criar PDPT
+        let pdpt_addr = if pml4[pml4_idx] & PAGE_PRESENT != 0 {
+            pml4[pml4_idx] & 0x000F_FFFF_FFFF_F000
+        } else {
+            let new_pdpt = allocator.allocate_frame(1)?;
+            unsafe {
+                core::ptr::write_bytes(new_pdpt as *mut u8, 0, 4096);
+            }
+            pml4[pml4_idx] = new_pdpt | PAGE_PRESENT | PAGE_WRITABLE;
+            new_pdpt
+        };
+
+        let pdpt = unsafe { &mut *(pdpt_addr as *mut [u64; 512]) };
+
+        // Obter ou criar PD
+        let pd_addr = if pdpt[pdpt_idx] & PAGE_PRESENT != 0 {
+            pdpt[pdpt_idx] & 0x000F_FFFF_FFFF_F000
+        } else {
+            let new_pd = allocator.allocate_frame(1)?;
+            unsafe {
+                core::ptr::write_bytes(new_pd as *mut u8, 0, 4096);
+            }
+            pdpt[pdpt_idx] = new_pd | PAGE_PRESENT | PAGE_WRITABLE;
+            new_pd
+        };
+
+        let pd = unsafe { &mut *(pd_addr as *mut [u64; 512]) };
+
+        // Mapear como huge page (2MiB) - flag PAGE_HUGE indica isso
+        pd[pd_idx] = phys | flags | PAGE_HUGE;
+
+        Ok(())
+    }
+
     /// Mapeia o Kernel no Higher Half (ou onde o ELF especificar).
     /// CRITICO: Implementacao real necessaria para evitar page fault/triple
     /// fault!

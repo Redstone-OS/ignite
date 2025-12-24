@@ -124,7 +124,10 @@ impl<'a, A: FrameAllocator + ?Sized> ElfLoader<'a, A> {
 
         let entry_point = elf.entry;
 
-        log::info!("Kernel carregado. Entry point virtual: {:#x}", entry_point);
+        crate::println!(
+            "[OK] Kernel carregado. Entry point virtual: {:#x}",
+            entry_point
+        );
         log::info!(
             "Memória física ocupada: {:#x} - {:#x}",
             kernel_phys_start,

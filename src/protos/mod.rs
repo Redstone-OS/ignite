@@ -16,21 +16,24 @@ pub mod redstone;
 #[derive(Debug, Clone, Copy, Default)]
 pub struct KernelLaunchInfo {
     /// Endereço virtual de entrada (RIP).
-    pub entry_point:   u64,
+    pub entry_point: u64,
+    /// Se true, usa jump fixo hardcoded (apenas Redstone).
+    /// Se false, usa jump dinâmico baseado em entry_point.
+    pub use_fixed_redstone_entry: bool,
     /// Ponteiro da Stack inicial (RSP), se o protocolo exigir que o bootloader
     /// a configure.
     pub stack_pointer: Option<u64>,
     /// Valor para o registrador RDI (1º Argumento - System V AMD64).
     /// Usado pelo Redstone (ponteiro para BootInfo).
-    pub rdi:           u64,
+    pub rdi: u64,
     /// Valor para o registrador RSI (2º Argumento).
     /// Usado pelo Linux (ponteiro para boot_params).
-    pub rsi:           u64,
+    pub rsi: u64,
     /// Valor para o registrador RDX (3º Argumento).
-    pub rdx:           u64,
+    pub rdx: u64,
     /// Valor para o registrador RBX.
     /// Usado pelo Multiboot2 (ponteiro para MBI).
-    pub rbx:           u64,
+    pub rbx: u64,
 }
 
 /// Interface que todo carregador de kernel deve implementar.
@@ -71,7 +74,7 @@ pub fn load_any(
     // 1. Tentar Protocolo Nativo (Redstone/ELF)
     let mut redstone = redstone::RedstoneProtocol::new(allocator, page_table);
     if redstone.identify(kernel_file) {
-        crate::println!("Detectado Kernel Redstone/ELF.");
+        crate::println!("[OK] Detectado Kernel Redstone/ELF.");
         return redstone.load(kernel_file, cmdline, modules);
     }
 
@@ -93,3 +96,4 @@ pub fn load_any(
         "Formato de kernel desconhecido",
     ))
 }
+
