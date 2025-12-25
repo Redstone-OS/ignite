@@ -1,17 +1,40 @@
-//! Boot Information Handoff (ABI)
+//! # Boot Information Handoff (ABI)
 //!
-//! Este arquivo define as estruturas de dados que são passadas do Bootloader
-//! para o Kernel. É o contrato de dados (Data Contract).
+//! Este arquivo define a **Interface Binária (ABI)** crítica entre Bootloader e
+//! Kernel. As estruturas aqui definidas não são apenas structs Rust; são blocos
+//! de memória bruta que devem obedecer a um layout rígido.
 //!
-//! # Regras de Ouro (Nível Industrial)
-//! 1. Tudo deve ser `#[repr(C)]` para garantir layout de memória consistente.
-//! 2. Versionamento é obrigatório (`version` field) para evitar
-//!    incompatibilidades.
-//! 3. Sem tipos complexos do Rust (Vec, String). Apenas primitivos e ponteiros.
+//! ## ⚠️ O Contrato de Sangue (Blood Pact)
+//! 1. **Layout Fixo:** Todas as structs DEVEM usar `#[repr(C)]`.
+//! 2. **Tipos Primitivos:** Proibido usar `Vec`, `String`, `Option`, `Result`
+//!    ou qualquer tipo com layout dinâmico/opaco.
+//! 3. **Versionamento:** O campo `version` existe para prevenir que um Ignite
+//!    v2 carregue um Forge v1 (e exploda tudo).
 //!
-//! IMPORTANTE: Esta estrutura DEVE estar 100% sincronizada com
-//! forge/src/core/handoff.rs
-
+//! ## 🔍 Análise Crítica (Kernel Engineer's View)
+//!
+//! ### ✅ Pontos Fortes
+//! - **Simplicidade:** A struct `BootInfo` é um POD (Plain Old Data) simples.
+//! - **Flexibilidade:** Suporta diferentes formatos de pixel (`PixelFormat`) e
+//!   tipos de memória (`MemoryType`), abstraindo x86/UEFI.
+//!
+//! ### ⚠️ Pontos de Atenção (Dívida Técnica)
+//! - **Duplicação de Código:** Este arquivo é uma cópia *manual* de
+//!   `forge/src/core/handoff.rs`.
+//!   - *Risco:* Se alguém editar lá e esquecer aqui, o Kernel lerá lixo e
+//!     causará um **Double Fault** ou comportamento errático.
+//! - **Magic Numbers:** A assinatura `BOOT_INFO_MAGIC` é boa, mas não há
+//!   checksum de integridade (CRC32).
+//!
+//! ## 🛠️ TODOs e Roadmap
+//! - [ ] **TODO: (Architecture)** Mover este arquivo para uma crate
+//!   compartilhada `redstone-abi` ou `redstone-common`.
+//!   - *Motivo:* Garantir "Single Source of Truth" em tempo de compilação.
+//! - [ ] **TODO: (Testing)** Adicionar teste de
+//!   `assert_eq!(size_of::<BootInfo>(), ...)` no CI.
+//!   - *Meta:* Falhar build se o tamanho da struct mudar sem alterar a versão.
+//! - [ ] **TODO: (Cleanup)** Remover structs `MemoryInfo` e `KernelInfo`
+//!   marcadas como Legacy.
 
 /// Assinatura mágica para validar que o BootInfo é legítimo ("REDSTONE" em
 /// ASCII).

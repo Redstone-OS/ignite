@@ -1,11 +1,42 @@
-//! Ignite Bootloader Library
+//! # Ignite Bootloader Library
 //!
-//! Biblioteca central que fornece todos os subsistemas necessários para o
-//! bootloader: UEFI, Memória, Sistema de Arquivos, UI, Segurança e Protocolos
-//! de Boot.
+//! A `ignite-lib` é a coleção de subsistemas modulares que compõem o
+//! bootloader. Ela é agnóstica do ponto de entrada (`main.rs`), permitindo que
+//! seja usada em testes unitários ou em diferentes targets UEFI.
 //!
-//! Esta biblioteca é `no_std` e projetada para ser consumida pelo binário
-//! `main.rs`.
+//! ## 🏗️ Arquitetura Modular
+//! O Ignite segue uma arquitetura em camadas para isolar a complexidade do
+//! firmware UEFI:
+//!
+//! ### 1. Camada de Abstração (Hardware/Firmware)
+//! - [`uefi`]: Wrappers Rust-safe para a API C da UEFI (System Table, Boot
+//!   Services).
+//! - [`arch`]: Código Assembly específico para x86_64 (Port I/O, paging).
+//! - [`video`]: Gerenciamento de GOP (Graphics Output Protocol).
+//!
+//! ### 2. Camada de Core (Lógica de Boot)
+//! - [`memory`]: Alocadores (Bump Allocator) e Gerenciamento de Páginas.
+//! - [`fs`]: Drivers de sistema de arquivos (abstração sobre protocolo
+//!   SimpleFS).
+//! - [`config`]: Parser do manifesto `ignite.cfg` (TOML-like).
+//!
+//! ### 3. Camada de Aplicação (UI & Security)
+//! - [`ui`]: Framework de UI imediata (texto e gráficos) para o menu de boot.
+//! - [`security`]: Verificação de assinaturas (Secure Boot) e TPM.
+//! - [`recovery`]: Ferramentas de diagnóstico pré-boot.
+//!
+//! ## ⚠️ Notas de Engenharia
+//! - **No Std:** Esta library não depende da `std`.
+//! - **Allocation:** Depende da crate `alloc`. O binário consumidor deve
+//!   fornecer um `#[global_allocator]`.
+//! - **Panic:** Fornece um handler `panic_impl` que imprime na tela e serial,
+//!   mas o binário deve registrá-lo.
+//!
+//! ## 🛠️ TODOs (Library Level)
+//! - [ ] **TODO: (Refactor)** Separar `uefi` em uma crate externa ou usar
+//!   `uefi-rs` puro (upstream).
+//!   - *Motivo:* Manter bindings UEFI manuais é propenso a erro e redundante.
+//! - [ ] **TODO: (Test)** Criar target de teste em QEMU/OVMF automatizado.
 
 #![no_std]
 #![feature(abi_efiapi)]

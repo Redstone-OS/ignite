@@ -1,8 +1,37 @@
-//! Gerenciamento de ACPI (Advanced Configuration and Power Interface)
+//! # ACPI Discovery (RSDP Finder)
 //!
-//! Responsável por localizar a tabela RSDP (Root System Description Pointer)
-//! através das tabelas de configuração do UEFI. Esta é a "chave" que o Kernel
-//! precisa para descobrir quantos CPUs existem, controlar energia, etc.
+//! Este módulo é o **Pathfinder da Configuração de Hardware**.
+//! Sua única responsabilidade é encontrar o "Ponteiro Sagrado" (RSDP) na
+//! memória, que servirá de âncora para o Kernel descobrir toda a topologia da
+//! máquina (CPUs, IOAPIC, HPET).
+//!
+//! ## 🎯 Mecânica de Descoberta
+//! A UEFI simplifica drasticamente isso em comparação com a BIOS (onde
+//! precisávamos escanear o EBDA). A System Table da UEFI expõe o RSDP como uma
+//! "Configuration Table", identificada por GUIDs.
+//!
+//! ## 🔍 Análise Crítica (Kernel Engineer's View)
+//!
+//! ### ✅ Pontos Fortes
+//! - **Modernidade:** Prioriza ACPI 2.0 (`ACPI_20_TABLE_GUID`). Isso garante
+//!   acesso a XSDT (endereços 64-bit).
+//! - **Segurança de Tipo:** Usa GUIDs tipados da crate `uefi`.
+//!
+//! ### ⚠️ Pontos de Atenção (Riscos)
+//! - **Confiança Cega:** O módulo retorna o endereço sem validar o Checksum do
+//!   RSDP.
+//!   - *Risco:* Se a BIOS estiver bugada e apontar para lixo, o Kernel vai
+//!     travar ao tentar parsear.
+//! - **Sem Leitura:** O Bootloader não lê as tabelas, apenas passa o ponteiro.
+//!   Isso é bom (mantém bootloader simples) e ruim (perde chance de validar
+//!   cedo).
+//!
+//! ## 🛠️ TODOs e Roadmap
+//! - [ ] **TODO: (Reliability)** Validar Checksum do RSDP antes de aceitar.
+//!   - *Motivo:* Fail-fast. Se o RSDP estiver corrompido, avisar o usuário
+//!     antes de bootar o kernel.
+//! - [ ] **TODO: (Feature)** Dump básico da topologia para debug.
+//!   - *Idea:* Imprimir "Found X CPUs" se `ignite.cfg` tiver `debug=true`.
 
 use crate::{
     core::error::{BootError, Result},

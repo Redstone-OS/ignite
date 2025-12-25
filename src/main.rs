@@ -1,8 +1,72 @@
-//! Redstone OS Bootloader (Ignite) - Entry Point
+//! # Redstone OS Bootloader (Ignite) - Entry Point
 //!
-//! O Executor Principal.
-//! Responsável por orquestrar a inicialização do hardware, carregar a
-//! configuração, interagir com o usuário e passar o controle para o Kernel.
+//! O `Ignite` é o primeiro estágio de software controlado por nós.
+//! Ele não é apenas um carregador; é o **Guardião da Integridade** do sistema.
+//!
+//! ## 🎯 Missão Crítica
+//! 1. **Sanitização:** Limpar o estado "sujo" deixado pelo firmware UEFI.
+//! 2. **Verificação:** Garantir que o Kernel é autêntico (Secure Boot /
+//!    Hashing).
+//! 3. **Mapeamento:** Preparar o mapa de memória físico e virtual para o
+//!    Kernel.
+//! 4. **Handoff:** Passar o controle de forma irreversível
+//!    (`ExitBootServices`).
+//!
+//! ## 🏗️ Fluxo de Execução (The Boot Pipeline)
+//!
+//! 1. **Early init:** Inicializa Serial (COM1) para logs de debug. O usuário
+//!    não vê, mas nós vemos.
+//! 2. **Heap Setup:** Aloca um pool inicial (Bump Allocator) para structs do
+//!    Rust (`Box`, `Vec`).
+//! 3. **Config Loading:** Busca `ignite.cfg` no ESP. Se falhar, entra
+//!    automático em **Recovery Mode**.
+//! 4. **Video Handshake:** Negocia o modo de vídeo GOP (Graphics Output
+//!    Protocol). O Kernel *não* toca na BIOS/UEFI de vídeo.
+//! 5. **UI/Menu:** Renderiza o menu de seleção (se não for `quiet`).
+//! 6. **Kernel Loading:**
+//!     - Lê o kernel para um buffer UEFI (`LoaderData`).
+//!     - **CRÍTICO:** Valida assinatura criptográfica (se Secure Policy estiver
+//!       ativa).
+//! 7. **Memory Map Capture:** Obtém o mapa de memória final da UEFI.
+//! 8. **Point of No Return:** Chama `ExitBootServices()`. A partir daqui, o
+//!    firmware UEFI morre.
+//! 9. **Trampoline:** Salto para `0xffffffff80000000` (Redstone) ou outro entry
+//!    point (Chainload).
+//!
+//! ## 🔍 Análise Crítica (Kernel Engineer's View)
+//!
+//! ### ✅ Pontos Fortes
+//! - **Robustez na Alocação:** O kernel é carregado diretamente em páginas
+//!   alocadas via UEFI (`allocate_pool`), evitando cópias duplas e fragmentação
+//!   do heap do bootloader.
+//! - **Fail-Safe:** O sistema de configuração tem fallback automático para
+//!   `Recovery` se o parser falhar.
+//! - **Observabilidade:** Logs são enviados para Serial *e* Vídeo desde o
+//!   primeiro milissegundo.
+//!
+//! ### ⚠️ Pontos de Atenção (Riscos e Dívida Técnica)
+//! - **Race Condition no ExitBootServices:** Existe uma janela minúscula onde,
+//!   se uma interrupção ocorrer entre `get_memory_map` e `exit_boot_services`,
+//!   a chamada falha. *Status:* O código tenta corrigir com um retry loop, mas
+//!   o ideal seria desabilitar interrupções antes.
+//! - **Argument Chaos:** `jump_to_kernel` passa 6 argumentos via registradores.
+//!   Isso é frágil. *Melhoria:* Passar um único ponteiro para `BootInfo` no
+//!   registro `RDI` (Convenção System V).
+//! - **Stack Size:** O stack do bootloader é definido pelo firmware. Se
+//!   recursarmos muito ou alocarmos arrays grandes na stack, causaremos **Stack
+//!   Overflow** silencioso.
+//!
+//! ## 🛠️ TODOs e Roadmap
+//! - [ ] **TODO: (Reliability)** Implementar **Watchdog Timer** durante o boot.
+//!   - *Motivo:* Se o kernel travar no early init, o PC não deve congelar; deve
+//!     resetar após 10s.
+//! - [ ] **TODO: (Architecture)** Migrar `jump_to_kernel` para usar apenas
+//!   `BootInfo`.
+//!   - *Impacto:* Simplifica a ABI e permite passar mais dados (ACPI,
+//!     Framebuffer) sem usar todos os registros da CPU.
+//! - [ ] **TODO: (Security)** Implementar **TPM Measurement**.
+//!   - *Meta:* Estender o PCR do TPM com o hash do Kernel carregado antes de
+//!     executá-lo.
 
 #![no_std]
 #![no_main]

@@ -1,8 +1,42 @@
-//! Infraestrutura de Logging
+//! # Unified Logging Infrastructure
 //!
-//! Permite o registro de eventos via Serial (COM1) e/ou Vídeo.
-//! Utiliza a crate `log` do ecossistema Rust para padronização.
-
+//! Este módulo fornece o backend para as macros `ignite::println!` e
+//! `ignite::log::*`. Ele atua como um multiplexador, enviando output para
+//! múltiplos destinos (Serial, Vídeo, RAM).
+//!
+//! ## 🎯 Propósito e Responsabilidade
+//! - **Observabilidade Precoce:** Permitir debug antes mesmo do vídeo ser
+//!   inicializado (via Serial COM1).
+//! - **Padronização:** Implementa a trait `log::Log`, permitindo usar o
+//!   ecossistema `log` crate.
+//!
+//! ## 🏗️ Arquitetura
+//! - **Static Global:** Usa `LOGGER` estático.
+//! - **Direct Hardware Access:** Chama `arch::x86::serial` diretamente. Isos
+//!   quebra camadas puras, mas é necessário no bootloader.
+//!
+//! ## 🔍 Análise Crítica (Kernel Engineer's View)
+//!
+//! ### ✅ Pontos Fortes
+//! - **Simplicidade:** Não aloca memória (no-alloc), seguro para usar no panic
+//!   handler.
+//! - **Level Filtering:** Permite compilar builds de "Release" sem logs de
+//!   "Trace" para boot mais rápido.
+//!
+//! ### ⚠️ Pontos de Atenção (Dívida Técnica)
+//! - **Hardcoded Output:** O logger chama `crate::arch::x86::serial`
+//!   diretamente. Se portarmos para ARM (UEFI usa PL011 UART), isso quebra.
+//!   - *Solução:* Abstrair via `trait LogOutput`.
+//! - **Output Síncrono:** A escrita na serial é bloqueante. Se o cabo serial
+//!   não estiver conectado (e o hardware não tiver buffer FIFO profundo), pode
+//!   atrasar o boot.
+//!
+//! ## 🛠️ TODOs e Roadmap
+//! - [ ] **TODO: (Feature)** Adicionar **In-Memory RingBuffer Logger**.
+//!   - *Motivo:* Permitir descarregar logs para o Kernel (via `BootInfo`) para
+//!     que o `dmesg` do Linux/Redstone mostre o que aconteceu no boot.
+//! - [ ] **TODO: (Refactor)** Suportar múltiplos sinks dinâmicos (Serial + GOP
+//!   + File).
 
 use log::{LevelFilter, Log, Metadata, Record};
 
@@ -59,4 +93,3 @@ macro_rules! println {
     () => ($crate::print!("\n"));
     ($($arg:tt)*) => ($crate::print!("{}\n", format_args!($($arg)*)));
 }
-

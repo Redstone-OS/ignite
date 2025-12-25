@@ -1,8 +1,40 @@
-//! Subsistema de Vídeo do Bootloader
+//! # GOP Video Subsystem
 //!
-//! Fornece gráficos de alta resolução via UEFI GOP (Graphics Output Protocol).
-//! Permite desenhar na tela durante o boot e prepara o Framebuffer para o
-//! Kernel.
+//! O subsistema `video` é responsável por tirar o computador da "Idade das
+//! Trevas" (Modo Texto/VGA) e habilitar gráficos de alta resolução via UEFI GOP
+//! (Graphics Output Protocol).
+//!
+//! ## 🎯 Responsabilidades
+//! 1. **Handshake GOP:** Encontrar o protocolo gráfico firmware.
+//! 2. **Mode Switch:** Configurar resolução nativa do monitor (ou fallback
+//!    seguro).
+//! 3. **Raw Access:** Expor o Framebuffer linear para que a UI do Ignite e
+//!    depois o Kernel possam desenhar pixels.
+//!
+//! ## 🔍 Análise Crítica (Kernel Engineer's View)
+//!
+//! ### ✅ Pontos Fortes
+//! - **Abstração Limpa:** Separa a lógica "suja" do UEFI (`gop.rs`) da
+//!   representação agnóstica (`framebuffer.rs`).
+//! - **Handoff Friendly:** As structs `FramebufferInfo` são desenhadas para
+//!   serem passadas para o Kernel sem dependência de UEFI.
+//!
+//! ### ⚠️ Pontos de Atenção (Riscos e Dívida)
+//! - **Hardcoded Auto-Detect:** A função `init_video` ignora preferências de
+//!   resolução. Se o monitor reportar EDID errado, ficamos presos em resolução
+//!   ruim.
+//!   - *Correção:* Permitir override via `ignite.cfg` (ex: `video_mode =
+//!     "1920x1080"`).
+//! - **Performance de Escrita:** Desenhar pixel a pixel no Framebuffer UEFI é
+//!   lento (uncached write-combining memory).
+//!   - *Mitigação:* A UI deve usar Double Buffering em RAM e fazer *Dirty Rect
+//!     Blit*.
+//!
+//! ## 🛠️ TODOs e Roadmap
+//! - [ ] **TODO: (Config)** Implementar seleção de resolução baseada em
+//!   `ignite.cfg`.
+//! - [ ] **TODO: (Driver)** Analisar suporte a múltiplos monitores (GOP
+//!   geralmente só expõe o primário).
 
 pub mod framebuffer;
 pub mod gop;
