@@ -19,9 +19,8 @@ goblin = { version = "0.10.4", default-features = false, features = [
 # Manipulação de bits (usado em drivers e flags)
 bitflags = "2.4"
 
-# Dependência local do sistema (Mantenha se o caminho existir, caso contrário comente)
-# O código do FS usa syscall::Error, então isso é necessário.
-syscall = { path = "../libs/syscall" }
+# Nota: syscall foi movido para redpowder SDK
+# Use redpowder::syscall para programas userspace
 
 # Removido: x86_64 (Nós implementamos port I/O e paging manualmente em src/arch e src/memory)
 # Removido: plain (Não utilizado explicitamente nos novos módulos, usamos repr(C))

@@ -26,7 +26,6 @@ dependencies = [
  "bitflags",
  "goblin",
  "log",
- "syscall",
 ]
 
 [[package]]
@@ -89,10 +88,6 @@ dependencies = [
  "quote",
  "unicode-ident",
 ]
-
-[[package]]
-name = "syscall"
-version = "0.1.0"
 
 [[package]]
 name = "unicode-ident"
