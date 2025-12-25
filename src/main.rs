@@ -121,30 +121,28 @@ pub extern "efiapi" fn efi_main(image_handle: Handle, system_table: *mut SystemT
     let (_gop, mut fb_info) =
         video::init_video(bs).expect("FALHA CRITICA: Nao foi possivel iniciar Video GOP");
 
+    // Preparar estrutura de Handoff para o Kernel (e UI)
+    let handoff_fb_info = HandoffFbInfo {
+        addr:   fb_info.addr,
+        size:   fb_info.size as u64,
+        width:  fb_info.width,
+        height: fb_info.height,
+        stride: fb_info.stride,
+        format: match fb_info.format {
+            ignite::video::PixelFormat::RgbReserved8Bit => ignite::core::handoff::PixelFormat::Rgb,
+            ignite::video::PixelFormat::BgrReserved8Bit => ignite::core::handoff::PixelFormat::Bgr,
+            ignite::video::PixelFormat::Bitmask => ignite::core::handoff::PixelFormat::Bitmask,
+            ignite::video::PixelFormat::BltOnly => ignite::core::handoff::PixelFormat::BltOnly,
+        },
+    };
+
     // 6. Interface de Usuário (Menu Gráfico)
     let selected_entry = if !config.quiet && config.timeout.unwrap_or(0) > 0 {
         let fb_ptr = fb_info.addr;
-
-        let ui_fb_info = HandoffFbInfo {
-            addr:   fb_info.addr,
-            size:   fb_info.size as u64,
-            width:  fb_info.width,
-            height: fb_info.height,
-            stride: fb_info.stride,
-            format: match fb_info.format {
-                ignite::video::PixelFormat::RgbReserved8Bit => {
-                    ignite::core::handoff::PixelFormat::Rgb
-                },
-                ignite::video::PixelFormat::BgrReserved8Bit => {
-                    ignite::core::handoff::PixelFormat::Bgr
-                },
-                ignite::video::PixelFormat::Bitmask => ignite::core::handoff::PixelFormat::Bitmask,
-                ignite::video::PixelFormat::BltOnly => ignite::core::handoff::PixelFormat::BltOnly,
-            },
-        };
-
         let mut menu = Menu::new(&config);
-        unsafe { menu.run(fb_ptr, ui_fb_info) }
+        // Reuse handoff_fb_info (Copy trait required or clone)
+        // HandoffFbInfo derives Copy/Clone
+        unsafe { menu.run(fb_ptr, handoff_fb_info) }
     } else {
         // Fallback seguro se o índice padrão for inválido
         if config.default_entry_idx >= config.entries.len() {
@@ -207,7 +205,7 @@ pub extern "efiapi" fn efi_main(image_handle: Handle, system_table: *mut SystemT
         .expect("FALHA CRITICA: Nao foi possivel alocar memoria UEFI para o kernel");
 
     ignite::println!(
-        "[92m[1m[OK][0m Buffer UEFI alocado em: 0x{:X}",
+        " [92m [1m[OK] [0m Buffer UEFI alocado em: 0x{:X}",
         kernel_buffer_ptr as u64
     );
 
@@ -256,7 +254,7 @@ pub extern "efiapi" fn efi_main(image_handle: Handle, system_table: *mut SystemT
         });
 
         ignite::println!(
-            "[92m[1m[OK][0m Modulo carregado em: 0x{:X}",
+            " [92m [1m[OK] [0m Modulo carregado em: 0x{:X}",
             mod_buffer_ptr as u64
         );
     }
@@ -330,7 +328,8 @@ pub extern "efiapi" fn efi_main(image_handle: Handle, system_table: *mut SystemT
         &kernel_data,
         selected_entry.cmdline.as_deref(),
         loaded_modules,
-        memory_map_buffer, // Passa o memory map
+        memory_map_buffer,     // Passa o memory map
+        Some(handoff_fb_info), // Passa Framebuffer Info
     )
     .expect("Falha ao preparar Kernel (Protocol Error)");
 

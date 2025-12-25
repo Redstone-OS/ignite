@@ -67,6 +67,7 @@ impl<'a> BootProtocol for LinuxProtocol<'a> {
         _cmdline: Option<&str>,
         _modules: Vec<LoadedFile>,
         _memory_map_buffer: (u64, u64),
+        _framebuffer: Option<crate::core::handoff::FramebufferInfo>,
     ) -> Result<KernelLaunchInfo> {
         // Implementação real seria aqui (parsing do setup header, alocação da zero
         // page, etc.)

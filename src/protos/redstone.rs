@@ -184,6 +184,7 @@ impl<'a> BootProtocol for RedstoneProtocol<'a> {
         _cmdline: Option<&str>,
         modules: Vec<LoadedFile>,
         memory_map_buffer: (u64, u64),
+        framebuffer: Option<crate::core::handoff::FramebufferInfo>,
     ) -> Result<KernelLaunchInfo> {
         // ---------------------------
         // 1) Identity map dos primeiros 4GiB
@@ -247,7 +248,7 @@ impl<'a> BootProtocol for RedstoneProtocol<'a> {
         //
         // Montamos os campos conhecidos — framebuffer, mapa de memória, kernel infos,
         // initrd.
-        let fb_info = self.prepare_framebuffer();
+        let fb_info = framebuffer.unwrap_or_else(|| self.prepare_framebuffer());
 
         // Tratamos o primeiro módulo como initrd, se presente. Em futuros updates:
         // - suportar múltiplos módulos com uma lista em BootInfo,

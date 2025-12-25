@@ -51,12 +51,14 @@ pub trait BootProtocol {
     /// * `cmdline`: String de argumentos do kernel.
     /// * `modules`: Lista de arquivos auxiliares (InitRD, Drivers) já
     ///   carregados.
+    /// * `framebuffer`: Informações de vídeo (GOP) para passar ao kernel.
     fn load(
         &mut self,
         kernel_file: &[u8],
         cmdline: Option<&str>,
         modules: Vec<LoadedFile>,
         memory_map_buffer: (u64, u64),
+        framebuffer: Option<crate::core::handoff::FramebufferInfo>,
     ) -> Result<KernelLaunchInfo>;
 }
 
@@ -68,6 +70,7 @@ pub fn load_any(
     cmdline: Option<&str>,
     modules: Vec<LoadedFile>,
     memory_map_buffer: (u64, u64), // (ponteiro, contagem)
+    framebuffer: Option<crate::core::handoff::FramebufferInfo>,
 ) -> Result<KernelLaunchInfo> {
     // Lista de protocolos suportados
     // Nota: Em um sistema real, você instanciaria isso de forma mais dinâmica
@@ -77,21 +80,39 @@ pub fn load_any(
     let mut redstone = redstone::RedstoneProtocol::new(allocator, page_table);
     if redstone.identify(kernel_file) {
         crate::println!("\u{001b}[92m\u{001b}[1m[OK]\u{001b}[0m Detectado Kernel Redstone/ELF.");
-        return redstone.load(kernel_file, cmdline, modules, memory_map_buffer);
+        return redstone.load(
+            kernel_file,
+            cmdline,
+            modules,
+            memory_map_buffer,
+            framebuffer,
+        );
     }
 
     // 2. Tentar Linux
     let mut linux = linux::LinuxProtocol::new(allocator);
     if linux.identify(kernel_file) {
         crate::println!("Detectado Kernel Linux (bzImage).");
-        return linux.load(kernel_file, cmdline, modules, memory_map_buffer);
+        return linux.load(
+            kernel_file,
+            cmdline,
+            modules,
+            memory_map_buffer,
+            framebuffer,
+        );
     }
 
     // 3. Tentar Multiboot2
     let mut mb2 = multiboot2::Multiboot2Protocol::new(allocator);
     if mb2.identify(kernel_file) {
         crate::println!("Detectado Kernel Multiboot2.");
-        return mb2.load(kernel_file, cmdline, modules, memory_map_buffer);
+        return mb2.load(
+            kernel_file,
+            cmdline,
+            modules,
+            memory_map_buffer,
+            framebuffer,
+        );
     }
 
     Err(crate::core::error::BootError::Generic(

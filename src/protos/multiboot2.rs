@@ -43,6 +43,7 @@ impl<'a> BootProtocol for Multiboot2Protocol<'a> {
         _cmdline: Option<&str>,
         _modules: Vec<LoadedFile>,
         _memory_map_buffer: (u64, u64),
+        _framebuffer: Option<crate::core::handoff::FramebufferInfo>,
     ) -> Result<KernelLaunchInfo> {
         Err(BootError::Generic("Multiboot2 ainda não implementado"))
     }
