@@ -32,7 +32,7 @@ impl<'a> BootProtocol for Multiboot2Protocol<'a> {
 
     fn identify(&self, file_content: &[u8]) -> bool {
         // Procurar magic nos primeiros 32KB
-        let search_limit = core::cmp::min(file_content.len(), 32768);
+        let _search_limit = core::cmp::min(file_content.len(), 32768);
         // Implementar busca alinhada a 8 bytes
         false // Placeholder
     }

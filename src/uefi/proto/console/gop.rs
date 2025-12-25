@@ -3,10 +3,7 @@
 //! Permite desenhar na tela em modo gráfico de alta resolução.
 //! Referência: UEFI Spec 2.10, Seção 12.9
 
-use crate::uefi::{
-    Result,
-    base::{Guid, Status},
-};
+use crate::uefi::base::{Guid, Status};
 
 /// GUID do Protocolo GOP.
 pub const GRAPHICS_OUTPUT_PROTOCOL_GUID: Guid = Guid::new(

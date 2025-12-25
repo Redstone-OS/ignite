@@ -3,10 +3,9 @@
 //! Detecta o estado de segurança do firmware lendo as variáveis globais EFI.
 //! Referência: UEFI Spec 2.10, Seção 3.3 (Global Variables)
 
-use alloc::vec::Vec;
 
 use crate::uefi::{
-    base::{Char16, Guid, Status},
+    base::{Guid, Status},
     system_table,
 };
 

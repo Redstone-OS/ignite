@@ -3,13 +3,11 @@
 //! Gerencia as variáveis de ambiente UEFI para rastrear falhas de boot
 //! e tentativas de recuperação entre reinicializações.
 
-use alloc::vec::Vec;
 use core::mem::size_of;
 
 use crate::uefi::{
     base::{Guid, Status},
     system_table,
-    table::runtime::RuntimeServices,
 };
 
 /// GUID da variável de estado do Ignite (Vendor GUID).

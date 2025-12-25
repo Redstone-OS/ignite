@@ -21,7 +21,7 @@ use crate::core::error::Result;
 /// Retorna o driver GOP e o Framebuffer ativo.
 pub fn init_video(
     boot_services: &crate::uefi::BootServices,
-) -> Result<(GopDriver, FramebufferInfo)> {
+) -> Result<(GopDriver<'_>, FramebufferInfo)> {
     let mut driver = GopDriver::new(boot_services)?;
 
     // Auto-detecta e configura a melhor resolução (geralmente nativa do monitor)

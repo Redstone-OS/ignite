@@ -12,7 +12,6 @@
 //! IMPORTANTE: Esta estrutura DEVE estar 100% sincronizada com
 //! forge/src/core/handoff.rs
 
-use core::fmt;
 
 /// Assinatura mágica para validar que o BootInfo é legítimo ("REDSTONE" em
 /// ASCII).

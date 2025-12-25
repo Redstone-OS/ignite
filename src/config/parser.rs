@@ -18,7 +18,7 @@ use super::{
     macros::MacroExpander,
     types::{BootConfig, Entry, Module, Protocol},
 };
-use crate::core::error::{BootError, ConfigError, Result};
+use crate::core::error::Result;
 
 pub struct Parser {
     expander: MacroExpander,
@@ -37,7 +37,7 @@ impl Parser {
 
         let lines: Vec<&str> = content.lines().map(|l| l.trim()).collect();
 
-        for (line_num, line) in lines.iter().enumerate() {
+        for (_line_num, line) in lines.iter().enumerate() {
             // Ignorar vazios e comentários
             if line.is_empty() || line.starts_with('#') {
                 continue;

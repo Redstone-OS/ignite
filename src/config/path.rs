@@ -4,7 +4,6 @@
 //! `guid(xxx):/efi/boot/bootx64.efi`.
 
 use alloc::string::{String, ToString};
-use core::fmt;
 
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub enum DeviceSpecifier {

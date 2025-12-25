@@ -9,10 +9,7 @@ use core::ffi::c_void;
 use crate::{
     core::error::{BootError, FileSystemError, Result},
     fs::dev::BlockDevice,
-    uefi::{
-        Result as UefiResult,
-        base::{Guid, Status},
-    },
+    uefi::base::{Guid, Status},
 };
 
 /// GUID do Protocolo Block IO.

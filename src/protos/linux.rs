@@ -4,7 +4,6 @@
 //! Permite carregar distros Linux padrão.
 
 use alloc::vec::Vec;
-use core::mem::size_of;
 
 use super::{BootProtocol, KernelLaunchInfo};
 use crate::{

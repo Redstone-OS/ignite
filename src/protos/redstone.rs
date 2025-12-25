@@ -57,13 +57,12 @@ use alloc::vec::Vec;
 use super::{BootProtocol, KernelLaunchInfo};
 use crate::{
     core::{
-        error::{BootError, Result},
-        handoff::{BootInfo, FramebufferInfo, MemoryInfo},
+        error::Result,
+        handoff::{BootInfo, FramebufferInfo},
         types::LoadedFile,
     },
     elf::ElfLoader,
     memory::{FrameAllocator, PageTableManager},
-    uefi::system_table,
 };
 
 /// Implementa o protocolo de boot "nativo" do Redstone.

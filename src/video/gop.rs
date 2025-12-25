@@ -3,7 +3,6 @@
 //! Interage com o firmware UEFI para configurar vídeo e acessar framebuffer
 //! nativo.
 
-use core::ffi::c_void;
 
 use super::{
     framebuffer::{Framebuffer, FramebufferInfo},
@@ -12,7 +11,7 @@ use super::{
 };
 use crate::{
     core::error::{BootError, Result, VideoError},
-    uefi::{BootServices, Handle},
+    uefi::BootServices,
 };
 
 // GUID do Protocolo GOP: {9042A9DE-23DC-4A38-96FB-7ADED080516A}
@@ -75,7 +74,7 @@ impl<'a> GopDriver<'a> {
 
     /// # Safety
     /// Retorna uma estrutura que escreve diretamente na VRAM.
-    pub unsafe fn get_framebuffer(&mut self) -> Result<Framebuffer> {
+    pub unsafe fn get_framebuffer(&mut self) -> Result<Framebuffer<'_>> {
         let info = self.get_current_mode_info()?;
 
         if info.addr == 0 || info.width == 0 || info.height == 0 {

@@ -15,7 +15,7 @@ extern crate alloc;
 use ignite::{
     config::{BootConfig, Protocol, loader::load_configuration},
     core::{
-        handoff::{BootInfo, FramebufferInfo as HandoffFbInfo}, // Alias para evitar colisão
+        handoff::FramebufferInfo as HandoffFbInfo, // Alias para evitar colisão
         logging,
     },
     fs::{FileSystem, UefiFileSystem},
@@ -90,7 +90,7 @@ pub extern "efiapi" fn efi_main(image_handle: Handle, system_table: *mut SystemT
         )
         .expect("Falha ao abrir SimpleFileSystem");
 
-    let mut fs_proto_ref =
+    let fs_proto_ref =
         unsafe { &mut *(fs_proto_ptr as *mut uefi::proto::media::fs::SimpleFileSystemProtocol) };
     let mut boot_fs = UefiFileSystem::new(fs_proto_ref);
 
@@ -118,7 +118,7 @@ pub extern "efiapi" fn efi_main(image_handle: Handle, system_table: *mut SystemT
     }
 
     // 5. Configurar Vídeo (GOP)
-    let (_gop, mut fb_info) =
+    let (_gop, fb_info) =
         video::init_video(bs).expect("FALHA CRITICA: Nao foi possivel iniciar Video GOP");
 
     // Preparar estrutura de Handoff para o Kernel (e UI)

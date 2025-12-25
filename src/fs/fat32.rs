@@ -3,13 +3,13 @@
 //! Permite ler partições FAT32 diretamente, sem depender do UEFI.
 //! Útil para montar partições extras que o firmware não reconheceu.
 
-use alloc::{boxed::Box, string::String, vec, vec::Vec};
+use alloc::{boxed::Box, vec};
 
 use crate::{
     core::error::{BootError, Result},
     fs::{
         dev::BlockDevice,
-        vfs::{Directory, File, FileSystem, Metadata},
+        vfs::{Directory, FileSystem},
     },
 };
 

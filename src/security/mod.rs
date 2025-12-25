@@ -19,7 +19,7 @@ pub use tpm::measure_binary;
 pub fn validate_and_measure(
     data: &[u8],
     name: &str,
-    policy: &SecurityPolicy,
+    _policy: &SecurityPolicy,
 ) -> crate::core::error::Result<()> {
     // 1. Medir no TPM (se disponível)
     // PCR 9 é comumente usado para o Kernel/Bootloader payload

@@ -66,7 +66,7 @@ pub fn measure_binary(
     let bs = system_table().boot_services();
 
     // Tenta localizar o protocolo TPM2
-    let protocol_ptr = match bs.locate_protocol(&EFI_TCG2_PROTOCOL_GUID) {
+    let _protocol_ptr = match bs.locate_protocol(&EFI_TCG2_PROTOCOL_GUID) {
         Ok(ptr) => ptr as *mut EfiTcg2Protocol,
         Err(_) => return Ok(()), // TPM não presente é OK (apenas ignora medição)
     };

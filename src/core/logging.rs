@@ -3,7 +3,6 @@
 //! Permite o registro de eventos via Serial (COM1) e/ou Vídeo.
 //! Utiliza a crate `log` do ecossistema Rust para padronização.
 
-use core::fmt::Write;
 
 use log::{LevelFilter, Log, Metadata, Record};
 

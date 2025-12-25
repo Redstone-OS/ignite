@@ -5,7 +5,6 @@
 
 use crate::uefi::{
     Status,
-    base::Handle,
     system_table,
     table::system::{InputKey, SimpleTextInputProtocol},
 };

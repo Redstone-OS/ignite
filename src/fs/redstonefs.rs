@@ -3,11 +3,11 @@
 //! Driver nativo para a partição do sistema operacional (/redstone-os).
 //! Baseado em ZFS/Btrfs (COW, Checksums).
 
-use alloc::{boxed::Box, string::String, vec::Vec};
+use alloc::boxed::Box;
 
 use super::{
     dev::BlockDevice,
-    vfs::{Directory, File, FileSystem},
+    vfs::{Directory, FileSystem},
 };
 use crate::core::error::{BootError, Result};
 

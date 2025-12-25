@@ -11,7 +11,6 @@ use super::{
 use crate::{
     config::{BootConfig, Entry},
     core::handoff::FramebufferInfo,
-    video::Color,
 };
 
 pub struct Menu<'a> {

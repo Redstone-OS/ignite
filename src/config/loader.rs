@@ -4,7 +4,7 @@
 
 use super::{parser::Parser, types::BootConfig};
 use crate::{
-    core::error::{BootError, Result},
+    core::error::Result,
     fs::{FileSystem, read_to_string},
 };
 

@@ -35,7 +35,7 @@ impl<'a> FrameAllocator for UefiFrameAllocator<'a> {
             .map_err(|_| BootError::Memory(MemoryError::AllocationFailed))
     }
 
-    fn allocate_at(&mut self, addr: u64, count: usize) -> Result<u64> {
+    fn allocate_at(&mut self, _addr: u64, count: usize) -> Result<u64> {
         // CORREÇÃO: allocate_at agora é um método específico ou usa allocate_pages
         // Se sua impl em uefi/table/boot.rs não tem allocate_at, use allocate_pages com
         // Address

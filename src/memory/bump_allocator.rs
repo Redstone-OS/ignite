@@ -47,7 +47,7 @@ unsafe impl GlobalAlloc for BumpAllocator {
     unsafe fn alloc(&self, layout: Layout) -> *mut u8 {
         let heap_start = *self.heap_start.get();
         let heap_end = *self.heap_end.get();
-        let mut next = *self.next.get();
+        let next = *self.next.get();
 
         if heap_start == 0 {
             return null_mut(); // Não inicializado

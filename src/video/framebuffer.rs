@@ -4,7 +4,6 @@
 //! desenhados. Esta estrutura é projetada para ser serializável e enviada ao
 //! Kernel via `BootInfo`.
 
-use core::{ptr, slice};
 
 use super::pixel::{Color, PixelFormat};
 

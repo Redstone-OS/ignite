@@ -7,7 +7,7 @@
 use super::font::BitFont;
 use crate::{
     core::handoff::FramebufferInfo,
-    video::{Color, Framebuffer, PixelFormat},
+    video::Color,
 };
 
 /// Contexto gráfico para desenho.

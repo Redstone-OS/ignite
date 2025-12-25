@@ -5,7 +5,7 @@
 
 use alloc::{
     boxed::Box,
-    string::{String, ToString},
+    string::String,
     vec::Vec,
 };
 
@@ -13,16 +13,12 @@ use super::path::normalize_path;
 use crate::{
     core::error::{BootError, FileSystemError, Result},
     fs::vfs::{Directory, File, FileSystem, Metadata},
-    uefi::{
-        Char16,
-        base::{Guid, Status},
-        proto::media::{
+    uefi::proto::media::{
             file::{
-                FILE_INFO_GUID, FILE_MODE_CREATE, FILE_MODE_READ, FILE_MODE_WRITE, FileProtocol,
+                FILE_MODE_READ, FileProtocol,
             },
             fs::SimpleFileSystemProtocol,
         },
-    },
 };
 
 // --- Estruturas Wrapper ---
