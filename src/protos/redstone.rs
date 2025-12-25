@@ -202,19 +202,12 @@ impl<'a> BootProtocol for RedstoneProtocol<'a> {
             .expect("Falha ao criar identity map (4GiB)");
 
         // ---------------------------
-        // 2) Configurar scratch slot para o kernel
+        // 2) Carregar segmentos ELF do kernel
         // ---------------------------
         //
-        // O scratch slot é uma região virtual que o kernel usa temporariamente para
-        // mapear frames físicos. Deve ser criada antes de alocar page-tables
-        // que o kernel venha a usar.
-        self.page_table
-            .setup_scratch_slot(self.allocator)
-            .expect("Falha ao configurar scratch slot");
-
-        // ---------------------------
-        // 3) Carregar segmentos ELF do kernel
-        // ---------------------------
+        // **IMPORTANTE:** O kernel deve ser carregado ANTES do scratch slot!
+        // Isso garante que a memória ocupada pelo kernel não sobreponha
+        // as page tables do scratch slot que serão alocadas a seguir.
         //
         // `ElfLoader` é responsável por interpretar os headers ELF e mapear (ou copiar)
         // os segmentos para o espaço físico apropriado. O loader deve retornar:
@@ -226,6 +219,17 @@ impl<'a> BootProtocol for RedstoneProtocol<'a> {
         // para aplicar essas transformações.
         let mut loader = ElfLoader::new(self.allocator, self.page_table);
         let loaded_kernel = loader.load_kernel(kernel_file)?;
+
+        // ---------------------------
+        // 3) Configurar scratch slot para o kernel
+        // ---------------------------
+        //
+        // O scratch slot é uma região virtual que o kernel usa temporariamente para
+        // mapear frames físicos. DEVE ser alocado APÓS o kernel para evitar que
+        // o kernel sobrescreva as page tables do scratch!
+        self.page_table
+            .setup_scratch_slot(self.allocator)
+            .expect("Falha ao configurar scratch slot");
 
         // ---------------------------
         // 4) Alocar BootInfo (frame físico)
