@@ -205,7 +205,7 @@ pub extern "efiapi" fn efi_main(image_handle: Handle, system_table: *mut SystemT
         .expect("FALHA CRITICA: Nao foi possivel alocar memoria UEFI para o kernel");
 
     ignite::println!(
-        " [92m [1m[OK] [0m Buffer UEFI alocado em: 0x{:X}",
+        "[92m[1m[OK][0m Buffer UEFI alocado em: 0x{:X}",
         kernel_buffer_ptr as u64
     );
 
@@ -254,7 +254,7 @@ pub extern "efiapi" fn efi_main(image_handle: Handle, system_table: *mut SystemT
         });
 
         ignite::println!(
-            " [92m [1m[OK] [0m Modulo carregado em: 0x{:X}",
+            "[92m[1m[OK][0m Modulo carregado em: 0x{:X}",
             mod_buffer_ptr as u64
         );
     }
