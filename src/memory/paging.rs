@@ -47,15 +47,52 @@
 use super::allocator::FrameAllocator;
 use crate::core::error::{BootError, MemoryError, Result};
 
-/// Flags x86_64 (básicas usadas neste módulo)
-const PAGE_PRESENT: u64 = 1 << 0;
-const PAGE_WRITABLE: u64 = 1 << 1;
-const PAGE_HUGE: u64 = 1 << 7; // PD entry com este bit = 2MiB page (ou 1GiB em PDPT)
-const PAGE_NO_EXEC: u64 = 1 << 63; // NX bit (quando suportado)
+/// Flags x86_64 para page table entries
+/// ====================================
+/// Estas flags são usadas tanto para páginas 4KiB quanto para huge pages 2MiB.
+/// Durante split de huge page, todas as flags relevantes devem ser preservadas.
 
-// Máscara para extrair endereço base de uma entrada de page table (bits de
-// endereço)
+// Flags básicas (presentes em todos os níveis)
+const PAGE_PRESENT: u64 = 1 << 0; // P - Página presente
+const PAGE_WRITABLE: u64 = 1 << 1; // R/W - Leitura/Escrita
+const PAGE_USER: u64 = 1 << 2; // U/S - User/Supervisor
+const PAGE_PWT: u64 = 1 << 3; // Page-level Write-Through
+const PAGE_PCD: u64 = 1 << 4; // Page-level Cache Disable
+const PAGE_ACCESSED: u64 = 1 << 5; // A - Accessed
+const PAGE_DIRTY: u64 = 1 << 6; // D - Dirty (para PT/huge pages)
+const PAGE_HUGE: u64 = 1 << 7; // PS - Page Size (2MiB em PD, 1GiB em PDPT)
+const PAGE_GLOBAL: u64 = 1 << 8; // G - Global (não flush no CR3 reload)
+const PAGE_PAT: u64 = 1 << 12; // PAT (para huge pages; bit 7 em PT)
+const PAGE_NO_EXEC: u64 = 1 << 63; // NX - No Execute
+
+/// Máscara para flags que devem ser preservadas ao converter huge page →
+/// páginas 4KiB. Inclui: Present, Writable, User, PWT, PCD, Accessed, Dirty,
+/// Global, NX NÃO inclui: PAGE_HUGE (será removida), PAGE_PAT (posição
+/// diferente em 4KiB)
+const PRESERVED_FLAGS_MASK: u64 = PAGE_PRESENT
+    | PAGE_WRITABLE
+    | PAGE_USER
+    | PAGE_PWT
+    | PAGE_PCD
+    | PAGE_ACCESSED
+    | PAGE_DIRTY
+    | PAGE_GLOBAL
+    | PAGE_NO_EXEC;
+
+/// Máscara para extrair PAT de huge page (bit 12)
+const HUGE_PAGE_PAT_BIT: u64 = 1 << 12;
+
+/// Máscara para PAT em página 4KiB (bit 7, mas PAGE_HUGE não existe aqui)
+const PAGE_PAT_4K: u64 = 1 << 7;
+
+// Máscara para extrair endereço base de uma entrada de page table
 const ADDR_MASK: u64 = 0x000F_FFFF_FFFF_F000;
+
+/// Tamanho de uma huge page (2MiB)
+const HUGE_PAGE_SIZE: u64 = 2 * 1024 * 1024;
+
+/// Tamanho de uma página normal (4KiB)
+const PAGE_SIZE: u64 = 4096;
 
 /// Gerenciador de Tabelas de Página.
 ///
@@ -97,6 +134,33 @@ impl PageTableManager {
     // Identity map (general-purpose)
     // ---------------------------------------------------------------------
 
+    /// Garante que o identity map para `phys_addr` use páginas 4KiB (não huge
+    /// page).
+    ///
+    /// Se a huge page correspondente no identity map ainda existir, ela será
+    /// dividida em 512 páginas de 4KiB preservando o mapeamento.
+    ///
+    /// **Use case:** O kernel precisa acessar certos endereços físicos via
+    /// identity map para estruturas como page tables, BootInfo, etc. Huge
+    /// pages impedem mapeamento granular, então esta função garante acesso
+    /// correto.
+    pub fn ensure_identity_map_4k(
+        &mut self,
+        phys_addr: u64,
+        allocator: &mut (impl FrameAllocator + ?Sized),
+    ) -> Result<()> {
+        // Log de trace para debug
+        crate::println!("[TRACE] ensure_identity_map_4k: phys={:#x}", phys_addr);
+
+        // No identity map, virt == phys
+        self.map_page(
+            phys_addr,
+            phys_addr,
+            PAGE_PRESENT | PAGE_WRITABLE,
+            allocator,
+        )
+    }
+
     /// Mapeia `count` páginas (4KiB) começando em `phys_addr` onde virtual ==
     /// físico.
     ///
@@ -129,6 +193,8 @@ impl PageTableManager {
         const SIZE_4GIB: u64 = 0x1_0000_0000;
         const SIZE_2MIB: u64 = 0x20_0000;
 
+        // Usar huge pages (2MiB) para performance.
+        // O kernel DEVE usar scratch slot para acessar memória física arbitrária.
         let mut phys = 0u64;
         while phys < SIZE_4GIB {
             self.map_huge_page(phys, phys, PAGE_PRESENT | PAGE_WRITABLE, allocator)?;
@@ -190,6 +256,97 @@ impl PageTableManager {
         pd[pd_idx] = (phys & ADDR_MASK) | flags | PAGE_HUGE;
 
         Ok(())
+    }
+
+    // ---------------------------------------------------------------------
+    // Split de Huge Page (Atômico e Completo)
+    // ---------------------------------------------------------------------
+    //
+    // Quando o bootloader precisa mapear páginas 4KiB em uma região que já
+    // possui uma huge page de 2MiB, é necessário "dividir" essa huge page em
+    // 512 páginas normais de 4KiB.
+    //
+    // **CRÍTICO**: Todas as 512 páginas DEVEM ser preenchidas para manter
+    // o identity map válido. Não preencher páginas deixa "buracos" no
+    // mapeamento que causam Page Faults quando o kernel tenta acessar
+    // essas regiões.
+    //
+    // **Flags preservadas**:
+    // - Present, Writable, User, PWT, PCD, Accessed, Dirty, Global, NX
+    // - PAT é convertido da posição de huge page (bit 12) para 4KiB (bit 7)
+
+    /// Divide uma huge page de 2MiB em 512 páginas de 4KiB.
+    ///
+    /// Esta função:
+    /// 1. Extrai o endereço base e flags da huge page existente
+    /// 2. Aloca um frame para a nova Page Table
+    /// 3. Preenche TODAS as 512 entradas preservando flags
+    /// 4. Substitui a entrada de huge page pela nova PT
+    ///
+    /// # Rollback
+    /// Se a alocação falhar, a huge page original permanece inalterada.
+    ///
+    /// # Returns
+    /// O endereço físico da nova Page Table alocada.
+    fn split_huge_page_to_pt(
+        pd: &mut [u64; 512],
+        pd_idx: usize,
+        allocator: &mut (impl FrameAllocator + ?Sized),
+    ) -> Result<u64> {
+        let huge_entry = pd[pd_idx];
+
+        // Verificar se realmente é uma huge page
+        if huge_entry & PAGE_HUGE == 0 {
+            // Não é huge page, retorna PT existente
+            crate::println!("[TRACE] split_huge: pd_idx={} NÃO é huge page", pd_idx);
+            return Ok(huge_entry & ADDR_MASK);
+        }
+
+        // Log: huge page será dividida
+        let huge_phys = huge_entry & ADDR_MASK;
+        crate::println!(
+            "[TRACE] split_huge: pd_idx={} DIVIDINDO huge page base={:#x}",
+            pd_idx,
+            huge_phys
+        );
+
+        // Extrair endereço base da huge page (alinhado a 2MiB)
+        let huge_phys_base = huge_entry & ADDR_MASK;
+
+        // Extrair flags que devem ser preservadas
+        let mut preserved_flags = huge_entry & PRESERVED_FLAGS_MASK;
+
+        // Converter PAT: em huge page está no bit 12, em 4KiB vai para bit 7
+        if huge_entry & HUGE_PAGE_PAT_BIT != 0 {
+            preserved_flags |= PAGE_PAT_4K;
+        }
+
+        // Alocar frame para a nova Page Table
+        // Se falhar, a huge page original permanece inalterada (rollback implícito)
+        let new_pt_phys = allocator.allocate_frame(1)?;
+
+        // Preencher TODAS as 512 entradas da PT
+        unsafe {
+            let pt = new_pt_phys as *mut [u64; 512];
+
+            for i in 0..512 {
+                // Calcular endereço físico desta página de 4KiB
+                let page_phys = huge_phys_base + (i as u64 * PAGE_SIZE);
+
+                // Criar entrada com endereço + flags preservadas
+                // NÃO incluímos PAGE_HUGE (é uma página 4KiB agora)
+                (*pt)[i] = (page_phys & ADDR_MASK) | preserved_flags;
+            }
+        }
+
+        // Substituir entrada de huge page pela nova PT
+        // Flags da entrada de PD: Present + Writable (+ User se aplicável)
+        let pd_flags = (huge_entry & (PAGE_PRESENT | PAGE_WRITABLE | PAGE_USER))
+            | PAGE_PRESENT
+            | PAGE_WRITABLE;
+        pd[pd_idx] = new_pt_phys | pd_flags;
+
+        Ok(new_pt_phys)
     }
 
     // ---------------------------------------------------------------------
@@ -275,16 +432,10 @@ impl PageTableManager {
 
         // PT (não queremos uma huge page aqui — garantimos PT normal)
         let pt_addr = if pd[pd_idx] & PAGE_PRESENT != 0 {
-            // Se for huge page, isso significa conflito — substituímos pela PT
+            // Se for huge page, precisamos fazer split para páginas 4KiB
             if pd[pd_idx] & PAGE_HUGE != 0 {
-                // Conflito: havia uma huge page. Substituímos por uma PT normal.
-                // Opcional: poderíamos herdá-la ou reproteger; aqui simplesmente criamos PT.
-                let new_pt = allocator.allocate_frame(1)?;
-                unsafe {
-                    core::ptr::write_bytes(new_pt as *mut u8, 0, 4096);
-                }
-                pd[pd_idx] = new_pt | PAGE_PRESENT | PAGE_WRITABLE;
-                new_pt
+                // Split atômico de huge page → 512 páginas de 4KiB
+                Self::split_huge_page_to_pt(pd, pd_idx, allocator)?
             } else {
                 pd[pd_idx] & ADDR_MASK
             }
@@ -363,23 +514,25 @@ impl PageTableManager {
         let pd = unsafe { &mut *(pd_addr as *mut [u64; 512]) };
 
         // PT: garantir que existe uma PT (não uma huge page).
-        if pd[pd_idx] & PAGE_PRESENT != 0 {
+        let pt_phys = if pd[pd_idx] & PAGE_PRESENT != 0 {
             if pd[pd_idx] & PAGE_HUGE != 0 {
-                // Havia uma huge page — substituímos por uma PT normal.
-                let new_pt = allocator.allocate_frame(1)?;
-                unsafe {
-                    core::ptr::write_bytes(new_pt as *mut u8, 0, 4096);
-                }
-                pd[pd_idx] = new_pt | PAGE_PRESENT | PAGE_WRITABLE;
+                // Huge page precisa ser dividida - usar função de split completo
+                Self::split_huge_page_to_pt(pd, pd_idx, allocator)?;
             }
-            // Se já existe PT normal, nada a fazer.
+            pd[pd_idx] & ADDR_MASK
         } else {
             let new_pt = allocator.allocate_frame(1)?;
             unsafe {
                 core::ptr::write_bytes(new_pt as *mut u8, 0, 4096);
             }
             pd[pd_idx] = new_pt | PAGE_PRESENT | PAGE_WRITABLE;
-        }
+            new_pt
+        };
+
+        // CRÍTICO: Garantir que a PT do scratch esteja acessível via identity map.
+        // O kernel usa phys_to_virt(SCRATCH_PT_PHYS) para mapear frames no scratch,
+        // então a PT deve estar em uma região do identity map com páginas 4KiB.
+        self.ensure_identity_map_4k(pt_phys, allocator)?;
 
         Ok(())
     }

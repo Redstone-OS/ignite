@@ -97,6 +97,14 @@ impl<'a, A: FrameAllocator + ?Sized> ElfLoader<'a, A> {
             self.page_table
                 .map_kernel(phys_addr, virt_page_start, pages_needed, self.allocator)?;
 
+            // 3. CRÍTICO: Garantir que o identity map tenha páginas 4KiB para esta região
+            // Isso permite que o kernel acesse memória física via phys_to_virt()
+            for j in 0..pages_needed {
+                let page_phys = phys_addr + (j as u64 * PAGE_SIZE);
+                self.page_table
+                    .ensure_identity_map_4k(page_phys, self.allocator)?;
+            }
+
             // 3. Copiar dados e zeroizar BSS
             unsafe {
                 let dest_ptr = (phys_addr + page_offset) as *mut u8;
@@ -131,11 +139,18 @@ impl<'a, A: FrameAllocator + ?Sized> ElfLoader<'a, A> {
 
         Ok(LoadedKernel {
             base_address: kernel_phys_start,
-            size: kernel_phys_end - kernel_phys_start,
+            // Mapear páginas extras para PMM bitmap
+            size: {
+                const EXTRA_PAGES: usize = 16;
+                for i in 0..EXTRA_PAGES {
+                    let extra_phys = kernel_phys_end + (i as u64 * PAGE_SIZE);
+                    let _ = self
+                        .page_table
+                        .ensure_identity_map_4k(extra_phys, self.allocator);
+                }
+                kernel_phys_end - kernel_phys_start
+            },
             entry_point,
         })
     }
 }
-
-
-
