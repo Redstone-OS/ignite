@@ -264,6 +264,9 @@ impl<'a> BootProtocol for RedstoneProtocol<'a> {
             magic:   crate::core::handoff::BOOT_INFO_MAGIC,
             version: crate::core::handoff::BOOT_INFO_VERSION,
 
+            // Padding para alinhamento de 8 bytes (ABI v2)
+            _padding: 0,
+
             framebuffer: fb_info,
 
             // Ponteiro e comprimento das entradas do memory map (fornecido pelo firmware/loader).
@@ -280,6 +283,10 @@ impl<'a> BootProtocol for RedstoneProtocol<'a> {
             // Initramfs (initrd) — se houver.
             initramfs_addr: initrd_addr,
             initramfs_size: initrd_size,
+
+            // Endereço FÍSICO da PML4 (CR3) - o kernel herda este mapeamento.
+            // IMPORTANTE: Endereço físico real, não virtual!
+            cr3_phys: self.page_table.pml4_addr(),
         };
 
         // ---------------------------

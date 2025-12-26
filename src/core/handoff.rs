@@ -41,10 +41,16 @@
 pub const BOOT_INFO_MAGIC: u64 = 0x524544_53544F4E45;
 
 /// Versão atual da estrutura de BootInfo. Incrementar se mudar o layout.
-pub const BOOT_INFO_VERSION: u32 = 1;
+/// v2: Adicionado _padding e cr3_phys para alinhamento correto com kernel.
+pub const BOOT_INFO_VERSION: u32 = 2;
 
 /// Informações completas de Boot entregues ao Kernel.
 /// DEVE corresponder EXATAMENTE a forge/src/core/handoff.rs::BootInfo
+///
+/// # Layout ABI (Crítico!)
+/// - `#[repr(C)]` garante layout previsível
+/// - `_padding` alinha framebuffer em 8 bytes
+/// - Todos os campos são tipos primitivos (sem Vec, String, Option)
 #[repr(C)]
 #[derive(Debug, Clone, Copy)]
 pub struct BootInfo {
@@ -53,6 +59,10 @@ pub struct BootInfo {
 
     /// Versão do protocolo de boot.
     pub version: u32,
+
+    /// Padding para alinhamento de 8 bytes (campos seguintes são u64).
+    /// O kernel DEVE ter este campo também para manter ABI.
+    pub _padding: u32,
 
     /// Informações de vídeo (GOP).
     pub framebuffer: FramebufferInfo,
@@ -71,6 +81,11 @@ pub struct BootInfo {
     /// Endereço do Initramfs (se carregado).
     pub initramfs_addr: u64,
     pub initramfs_size: u64,
+
+    /// Endereço FÍSICO do CR3 (PML4) configurado pelo bootloader.
+    /// O kernel herda esta hierarquia de page tables e NÃO deve liberar esses
+    /// frames. IMPORTANTE: Este é o endereço físico real, não virtual!
+    pub cr3_phys: u64,
 }
 
 /// Detalhes sobre o Framebuffer Gráfico.
@@ -122,34 +137,5 @@ pub enum MemoryType {
     Framebuffer = 8,
 }
 
-// =============================================================================
-// Estruturas antigas (deprecated - mantidas para compatibilidade temporária)
-// =============================================================================
-
-/// Resumo do mapa de memória (LEGACY - não usar)
-#[repr(C)]
-#[derive(Debug, Clone)]
-pub struct MemoryInfo {
-    /// Ponteiro para o array de regiões de memória.
-    pub map_addr:       u64,
-    /// Número de entradas no mapa.
-    pub map_count:      usize,
-    /// Endereço físico da Tabela de Páginas (PML4/CR3) ativa.
-    pub page_table_cr3: u64,
-}
-
-/// Detalhes sobre o Kernel carregado (LEGACY - não usar)
-#[repr(C)]
-#[derive(Debug, Clone, Copy)]
-pub struct KernelInfo {
-    /// Endereço físico onde o kernel foi carregado.
-    pub phys_addr:   u64,
-    /// Endereço virtual de entrada (Entry Point).
-    pub entry_point: u64,
-    /// Tamanho total em memória.
-    pub size:        u64,
-    /// Base da Stack inicial configurada pelo bootloader.
-    pub stack_base:  u64,
-    /// Tamanho da Stack.
-    pub stack_size:  u64,
-}
+// Nota: Structs legacy (MemoryInfo, KernelInfo) removidas na v2.
+// Todos os dados agora passam via BootInfo unificado.
