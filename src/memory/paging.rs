@@ -149,9 +149,6 @@ impl PageTableManager {
         phys_addr: u64,
         allocator: &mut (impl FrameAllocator + ?Sized),
     ) -> Result<()> {
-        // Log de trace para debug
-        crate::println!("[TRACE] ensure_identity_map_4k: phys={:#x}", phys_addr);
-
         // No identity map, virt == phys
         self.map_page(
             phys_addr,
@@ -298,17 +295,11 @@ impl PageTableManager {
         // Verificar se realmente é uma huge page
         if huge_entry & PAGE_HUGE == 0 {
             // Não é huge page, retorna PT existente
-            crate::println!("[TRACE] split_huge: pd_idx={} NÃO é huge page", pd_idx);
             return Ok(huge_entry & ADDR_MASK);
         }
 
         // Log: huge page será dividida
         let huge_phys = huge_entry & ADDR_MASK;
-        crate::println!(
-            "[TRACE] split_huge: pd_idx={} DIVIDINDO huge page base={:#x}",
-            pd_idx,
-            huge_phys
-        );
 
         // Extrair endereço base da huge page (alinhado a 2MiB)
         let huge_phys_base = huge_entry & ADDR_MASK;
