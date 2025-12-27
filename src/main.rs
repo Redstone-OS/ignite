@@ -664,12 +664,12 @@ unsafe extern "C" fn jump_to_kernel(
 ) -> ! {
     if use_fixed {
         // Protocolo Redstone: jump fixo para 0xffffffff80000000
-        ignite::println!("[95m[1m[DEBUG][0m Saltando para o kernel via jump_to_kernel_redstone");
+        ignite::println!("[95m[1m[JUMP][0m Saltando para o kernel via jump_to_kernel_redstone");
         jump_to_kernel_redstone(stack, arg1, arg2, arg3, arg4, cr3)
     } else {
         // Outros protocolos: jump dinâmico
         ignite::println!(
-            "[95m[1m[DEBUG][0m Usando jump_to_kernel_generic (entry=0x{:X})",
+            "[95m[1m[JUMP][0m Usando jump_to_kernel_generic (entry=0x{:X})",
             entry
         );
         jump_to_kernel_generic(entry, stack, arg1, arg2, arg3, arg4, cr3)

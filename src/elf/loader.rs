@@ -3,7 +3,7 @@
 //! Lê segmentos `PT_LOAD`, aloca frames físicos correspondentes e mapeia
 //! no endereço virtual solicitado pelo Kernel.
 
-use goblin::elf::{Elf, program_header::PT_LOAD};
+use goblin::elf::{program_header::PT_LOAD, Elf};
 
 use super::header::validate_header;
 use crate::{
@@ -11,7 +11,7 @@ use crate::{
         error::{BootError, ElfError, Result},
         types::LoadedKernel,
     },
-    memory::{FrameAllocator, PageTableManager, layout::PAGE_SIZE},
+    memory::{layout::PAGE_SIZE, FrameAllocator, PageTableManager},
 };
 
 // ?Sized permite aceitar Trait Objects
@@ -92,15 +92,6 @@ impl<'a, A: FrameAllocator + ?Sized> ElfLoader<'a, A> {
             if virt_end > kernel_virt_end {
                 kernel_virt_end = virt_end;
             }
-
-            // DEBUG: Log detalhado de cada segmento
-            crate::println!(
-                "[ELF] Segmento: virt={:#x}..{:#x} phys={:#x} pages={}",
-                virt_page_start,
-                virt_end,
-                phys_addr,
-                pages_needed
-            );
 
             // 2. Mapear na tabela de páginas (virtual -> física)
             self.page_table
