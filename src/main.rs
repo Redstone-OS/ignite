@@ -120,11 +120,11 @@ pub extern "efiapi" fn efi_main(image_handle: Handle, system_table: *mut SystemT
         let heap_start = uefi::system_table()
             .boot_services()
             .allocate_pool(uefi::table::boot::MemoryType::LoaderData, heap_size)
-            .expect("FALHA FATAL: Nao foi possivel alocar Heap inicial");
+            .expect("\x1b[1;31m[FAIL]\x1b[0m Nao foi possivel alocar Heap inicial");
 
         ALLOCATOR.init(heap_start as usize, heap_size);
     }
-    ignite::println!("[92m[1m[OK][0m Heap inicializada.");
+    ignite::println!("\x1b[32m[OK]\x1b[0m Heap inicializada.");
 
     // 3. Configurar Sistema de Arquivos de Boot (ESP)
     let bs = uefi::system_table().boot_services();
@@ -137,7 +137,7 @@ pub extern "efiapi" fn efi_main(image_handle: Handle, system_table: *mut SystemT
             Handle::null(),
             uefi::table::boot::OPEN_PROTOCOL_GET_PROTOCOL,
         )
-        .expect("Falha ao abrir LoadedImage");
+        .expect("\x1b[1;31m[FAIL]\x1b[0m Falha ao abrir LoadedImage");
 
     let loaded_image =
         unsafe { &*(loaded_image_ptr as *mut uefi::proto::loaded_image::LoadedImageProtocol) };
@@ -151,7 +151,7 @@ pub extern "efiapi" fn efi_main(image_handle: Handle, system_table: *mut SystemT
             Handle::null(),
             uefi::table::boot::OPEN_PROTOCOL_GET_PROTOCOL,
         )
-        .expect("Falha ao abrir SimpleFileSystem");
+        .expect("\x1b[1;31m[FAIL]\x1b[0m Falha ao abrir SimpleFileSystem");
 
     let fs_proto_ref =
         unsafe { &mut *(fs_proto_ptr as *mut uefi::proto::media::fs::SimpleFileSystemProtocol) };
@@ -182,7 +182,7 @@ pub extern "efiapi" fn efi_main(image_handle: Handle, system_table: *mut SystemT
 
     // 5. Configurar Vídeo (GOP)
     let (_gop, fb_info) =
-        video::init_video(bs).expect("FALHA CRITICA: Nao foi possivel iniciar Video GOP");
+        video::init_video(bs).expect("\x1b[1;31m[FAIL]\x1b[0m Nao foi possivel iniciar Video GOP");
 
     // Preparar estrutura de Handoff para o Kernel (e UI)
     let handoff_fb_info = HandoffFbInfo {
@@ -232,10 +232,12 @@ pub extern "efiapi" fn efi_main(image_handle: Handle, system_table: *mut SystemT
     // alocamos diretamente via UEFI allocate_pool. Isso permite carregar
     // kernels de qualquer tamanho sem desperdício de RAM.
 
-    let mut root_dir = boot_fs.root().expect("Falha raiz FS");
+    let mut root_dir = boot_fs
+        .root()
+        .expect("\x1b[1;31m[FAIL]\x1b[0m Falha raiz FS");
     let mut kernel_file = root_dir
         .open_file(&selected_entry.path)
-        .expect("Kernel nao encontrado no disco");
+        .expect("\x1b[1;31m[FAIL]\x1b[0m Kernel nao encontrado no disco");
 
     // 8.1: Obter tamanho exato do kernel via metadata
     let kernel_metadata = kernel_file
@@ -251,11 +253,11 @@ pub extern "efiapi" fn efi_main(image_handle: Handle, system_table: *mut SystemT
 
     // 8.2: Validar tamanho (proteção contra kernels malformados ou muito grandes)
     if kernel_size == 0 {
-        panic!("Kernel tem tamanho zero! Arquivo corrompido?");
+        panic!("\x1b[1;31m[FAIL]\x1b[0m Kernel tem tamanho zero! Arquivo corrompido?");
     }
     if kernel_size > ignite::core::config::limits::MAX_KERNEL_SIZE {
         panic!(
-            "Kernel muito grande: {} bytes (max: {} bytes)",
+            "\x1b[1;31m[FAIL]\x1b[0m Kernel muito grande: {} bytes (max: {} bytes)",
             kernel_size,
             ignite::core::config::limits::MAX_KERNEL_SIZE
         );
@@ -265,10 +267,10 @@ pub extern "efiapi" fn efi_main(image_handle: Handle, system_table: *mut SystemT
     // memory map)
     let kernel_buffer_ptr = bs
         .allocate_pool(uefi::table::boot::MemoryType::LoaderData, kernel_size)
-        .expect("FALHA CRITICA: Nao foi possivel alocar memoria UEFI para o kernel");
+        .expect("\x1b[1;31m[FAIL]\x1b[0m Nao foi possivel alocar memoria UEFI para o kernel");
 
     ignite::println!(
-        "[92m[1m[OK][0m Buffer UEFI alocado em: 0x{:X}",
+        "\x1b[32m[OK]\x1b[0m Buffer UEFI alocado em: 0x{:X}",
         kernel_buffer_ptr as u64
     );
 
@@ -279,7 +281,7 @@ pub extern "efiapi" fn efi_main(image_handle: Handle, system_table: *mut SystemT
 
     // 8.5: Ler kernel diretamente para o buffer (sem alocações intermediárias)
     ignite::fs::read_exact(kernel_file.as_mut(), kernel_data)
-        .expect("Erro de I/O ao ler Kernel para buffer UEFI");
+        .expect("\x1b[1;31m[FAIL]\x1b[0m Erro de I/O ao ler Kernel para buffer UEFI");
 
     // 8.6: Carregar Módulos (InitRD, Drivers)
     let mut loaded_modules = alloc::vec::Vec::new();
@@ -288,11 +290,11 @@ pub extern "efiapi" fn efi_main(image_handle: Handle, system_table: *mut SystemT
 
         let mut module_file = root_dir
             .open_file(&module_cfg.path)
-            .expect("FALHA: Modulo nao encontrado no disco");
+            .expect("\x1b[1;31m[FAIL]\x1b[0m Modulo nao encontrado no disco");
 
         let mod_meta = module_file
             .metadata()
-            .expect("Falha ao obter metadata do modulo");
+            .expect("\x1b[1;31m[FAIL]\x1b[0m Falha ao obter metadata do modulo");
         let mod_size = mod_meta.size as usize;
 
         ignite::println!("Tamanho: {} bytes ({} KB)", mod_size, mod_size / 1024);
@@ -304,12 +306,13 @@ pub extern "efiapi" fn efi_main(image_handle: Handle, system_table: *mut SystemT
 
         let mod_buffer_ptr = bs
             .allocate_pool(uefi::table::boot::MemoryType::LoaderData, mod_size)
-            .expect("FALHA CRITICA: OOM ao alocar memoria para modulo");
+            .expect("\x1b[1;31m[FAIL]\x1b[0m OOM ao alocar memoria para modulo");
 
         let mod_data: &mut [u8] =
             unsafe { core::slice::from_raw_parts_mut(mod_buffer_ptr as *mut u8, mod_size) };
 
-        ignite::fs::read_exact(module_file.as_mut(), mod_data).expect("Erro de I/O ao ler modulo");
+        ignite::fs::read_exact(module_file.as_mut(), mod_data)
+            .expect("\x1b[1;31m[FAIL]\x1b[0m Erro de I/O ao ler modulo");
 
         loaded_modules.push(ignite::core::types::LoadedFile {
             ptr:  mod_buffer_ptr as u64,
@@ -317,7 +320,7 @@ pub extern "efiapi" fn efi_main(image_handle: Handle, system_table: *mut SystemT
         });
 
         ignite::println!(
-            "[92m[1m[OK][0m Modulo carregado em: 0x{:X}",
+            "\x1b[32m[OK]\x1b[0m Modulo carregado em: 0x{:X}",
             mod_buffer_ptr as u64
         );
     }
@@ -325,7 +328,10 @@ pub extern "efiapi" fn efi_main(image_handle: Handle, system_table: *mut SystemT
     // 9. Segurança
     let policy = SecurityPolicy::new(&config);
     if let Err(e) = validate_and_measure(&kernel_data, &selected_entry.name, &policy) {
-        panic!("Violacao de Seguranca detectada: {:?}", e);
+        panic!(
+            "\x1b[1;31m[FAIL]\x1b[0m Violacao de Seguranca detectada: {:?}",
+            e
+        );
     }
     // TODO: Validar módulos também
 
@@ -350,7 +356,10 @@ pub extern "efiapi" fn efi_main(image_handle: Handle, system_table: *mut SystemT
         };
 
         if status.is_error() {
-            panic!("Falha ao carregar imagem EFI: {:?}", status);
+            panic!(
+                "\x1b[1;31m[FAIL]\x1b[0m Falha ao carregar imagem EFI: {:?}",
+                status
+            );
         }
 
         // Iniciar a imagem
@@ -362,7 +371,10 @@ pub extern "efiapi" fn efi_main(image_handle: Handle, system_table: *mut SystemT
             unsafe { (bs.start_image_f)(child_handle, &mut exit_data_size, &mut exit_data) };
 
         if status.is_error() {
-            ignite::println!("Aplicacao EFI retornou erro: {:?}", status);
+            ignite::println!(
+                "\x1b[1;31m[FAIL]\x1b[0m Aplicacao EFI retornou erro: {:?}",
+                status
+            );
             // Se falhar, voltamos ao menu ou paramos
             loop {
                 core::hint::spin_loop();
@@ -394,7 +406,7 @@ pub extern "efiapi" fn efi_main(image_handle: Handle, system_table: *mut SystemT
         memory_map_buffer,     // Passa o memory map
         Some(handoff_fb_info), // Passa Framebuffer Info
     )
-    .expect("Falha ao preparar Kernel (Protocol Error)");
+    .expect("\x1b[1;31m[FAIL]\x1b[0m Falha ao preparar Kernel (Protocol Error)");
 
     ignite::println!("Saindo dos servicos de boot UEFI...");
 
@@ -486,7 +498,7 @@ fn capture_memory_map(bs: &ignite::uefi::BootServices) -> (u64, u64) {
     map_size += descriptor_size * 10;
     let buffer_ptr = bs
         .allocate_pool(ignite::uefi::table::boot::MemoryType::LoaderData, map_size)
-        .expect("Falha ao alocar buffer para memory map");
+        .expect("\x1b[1;31m[FAIL]\x1b[0m Falha ao alocar buffer para memory map");
 
     // 3. Obter memory map real
     let status = unsafe {
@@ -500,7 +512,7 @@ fn capture_memory_map(bs: &ignite::uefi::BootServices) -> (u64, u64) {
     };
 
     if status.is_error() {
-        ignite::println!("AVISO: Falha ao capturar memory map!");
+        ignite::println!("\x1b[1;31m[FAIL]\x1b[0m Falha ao capturar memory map!");
         return (0, 0);
     }
 
@@ -514,7 +526,8 @@ fn capture_memory_map(bs: &ignite::uefi::BootServices) -> (u64, u64) {
             ignite::uefi::table::boot::MemoryType::LoaderData,
             entries_size,
         )
-        .expect("Falha ao alocar array de memory map") as *mut MemoryMapEntry;
+        .expect("\x1b[1;31m[FAIL]\x1b[0m Falha ao alocar array de memory map")
+        as *mut MemoryMapEntry;
 
     let forge_entries = unsafe { core::slice::from_raw_parts_mut(entries_ptr, num_descriptors) };
 
@@ -664,12 +677,14 @@ unsafe extern "C" fn jump_to_kernel(
 ) -> ! {
     if use_fixed {
         // Protocolo Redstone: jump fixo para 0xffffffff80000000
-        ignite::println!("[95m[1m[JUMP][0m Saltando para o kernel via jump_to_kernel_redstone");
+        ignite::println!(
+            "\x1b[35m[JUMP]\x1b[0m Saltando para o kernel via jump_to_kernel_redstone"
+        );
         jump_to_kernel_redstone(stack, arg1, arg2, arg3, arg4, cr3)
     } else {
         // Outros protocolos: jump dinâmico
         ignite::println!(
-            "[95m[1m[JUMP][0m Usando jump_to_kernel_generic (entry=0x{:X})",
+            "\x1b[35m[JUMP]\x1b[0m Usando jump_to_kernel_generic (entry=0x{:X})",
             entry
         );
         jump_to_kernel_generic(entry, stack, arg1, arg2, arg3, arg4, cr3)
