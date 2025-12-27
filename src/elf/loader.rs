@@ -93,6 +93,15 @@ impl<'a, A: FrameAllocator + ?Sized> ElfLoader<'a, A> {
                 kernel_virt_end = virt_end;
             }
 
+            // DEBUG: Log detalhado de cada segmento
+            crate::println!(
+                "[ELF] Segmento: virt={:#x}..{:#x} phys={:#x} pages={}",
+                virt_page_start,
+                virt_end,
+                phys_addr,
+                pages_needed
+            );
+
             // 2. Mapear na tabela de páginas (virtual -> física)
             self.page_table
                 .map_kernel(phys_addr, virt_page_start, pages_needed, self.allocator)?;
