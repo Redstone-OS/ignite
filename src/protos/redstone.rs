@@ -133,6 +133,40 @@ impl<'a> RedstoneProtocol<'a> {
             format: crate::core::handoff::PixelFormat::Rgb,
         }
     }
+
+    /// Calcula o endereço físico máximo a partir do memory map.
+    ///
+    /// Itera sobre todas as entradas do memory map e retorna o maior
+    /// endereço físico (base + len).
+    fn calculate_max_phys_addr(memory_map_buffer: (u64, u64)) -> u64 {
+        use crate::core::handoff::MemoryMapEntry;
+
+        let (map_addr, entry_count) = memory_map_buffer;
+
+        if map_addr == 0 || entry_count == 0 {
+            // Fallback para 4GB se memory map não disponível
+            return 0x1_0000_0000;
+        }
+
+        let entries = unsafe {
+            core::slice::from_raw_parts(map_addr as *const MemoryMapEntry, entry_count as usize)
+        };
+
+        let mut max_addr: u64 = 0;
+        for entry in entries {
+            let end_addr = entry.base.saturating_add(entry.len);
+            if end_addr > max_addr {
+                max_addr = end_addr;
+            }
+        }
+
+        // Se nenhuma entrada válida, usar 4GB como fallback
+        if max_addr == 0 {
+            0x1_0000_0000
+        } else {
+            max_addr
+        }
+    }
 }
 
 impl<'a> BootProtocol for RedstoneProtocol<'a> {
@@ -186,20 +220,26 @@ impl<'a> BootProtocol for RedstoneProtocol<'a> {
         framebuffer: Option<crate::core::handoff::FramebufferInfo>,
     ) -> Result<KernelLaunchInfo> {
         // ---------------------------
-        // 1) Identity map dos primeiros 4GiB
+        // 1) Identity map de toda a memória física
         // ---------------------------
         //
-        // **Por que:** muitos kernels esperam que a memória física baixa seja acessível
+        // **Por que:** muitos kernels esperam que a memória física seja acessível
         // durante a fase inicial (por exemplo, ao zerar frames ou construir page
-        // tables).
+        // tables). Em sistemas com mais de 4GB de RAM, o UEFI pode alocar buffers
+        // acima de 4GB, então precisamos mapear toda a memória disponível.
         //
-        // NOTA: Aqui usamos `expect` na falha pois, no contexto de boot, falha em criar
-        // identity map normalmente é uma condição fatal. Idealmente migrar para erro
-        // retornado (por exemplo, `map_err(|e| BootError::MapFailure(e))`) quando o
-        // enum `BootError` suportar variantes apropriadas.
+        // Calculamos o endereço físico máximo a partir do memory map.
+        let max_phys_addr = Self::calculate_max_phys_addr(memory_map_buffer);
+
+        // Adicionar margem de 256MB para alocações extras do UEFI
+        // e arredondar para o próximo GB boundary
+        const MARGIN: u64 = 256 * 1024 * 1024; // 256 MB
+        const GB_MASK: u64 = 0x3FFF_FFFF; // ~1GB
+        let map_limit = (max_phys_addr + MARGIN + GB_MASK) & !GB_MASK;
+
         self.page_table
-            .identity_map_4gib(self.allocator)
-            .expect("Falha ao criar identity map (4GiB)");
+            .identity_map_range(map_limit, self.allocator)
+            .expect("Falha ao criar identity map");
 
         // ---------------------------
         // 2) Carregar segmentos ELF do kernel

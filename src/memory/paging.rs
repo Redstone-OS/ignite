@@ -179,28 +179,49 @@ impl PageTableManager {
         Ok(())
     }
 
-    /// Mapeia os primeiros 4 GiB de memória física usando huge pages (2 MiB).
+    /// Mapeia memória física de 0 até `max_phys_addr` usando huge pages (2
+    /// MiB).
     ///
     /// **Motivação:** o bootloader e o early-kernel frequentemente executam em
-    /// endereços físicos baixos. Ao trocar CR3 precisamos garantir que esses
-    /// endereços permaneçam acessíveis. Usar huge pages reduz TLB pressure
-    /// e diminui a quantidade de page tables alocadas.
-    pub fn identity_map_4gib(
+    /// endereços físicos que podem estar em qualquer região da RAM. Ao trocar
+    /// CR3 precisamos garantir que esses endereços permaneçam acessíveis.
+    /// Usar huge pages reduz TLB pressure e diminui a quantidade de page
+    /// tables alocadas.
+    ///
+    /// **Uso:** Para sistemas com mais de 4GB de RAM, passe o endereço físico
+    /// máximo + margem para garantir que toda a memória esteja mapeada.
+    pub fn identity_map_range(
         &mut self,
+        max_phys_addr: u64,
         allocator: &mut (impl FrameAllocator + ?Sized),
     ) -> Result<()> {
-        const SIZE_4GIB: u64 = 0x1_0000_0000;
         const SIZE_2MIB: u64 = 0x20_0000;
 
+        // Arredondar para cima para o próximo boundary de 2MiB
+        let aligned_max = (max_phys_addr + SIZE_2MIB - 1) & !(SIZE_2MIB - 1);
+
         // Usar huge pages (2MiB) para performance.
-        // O kernel DEVE usar scratch slot para acessar memória física arbitrária.
         let mut phys = 0u64;
-        while phys < SIZE_4GIB {
+        while phys < aligned_max {
             self.map_huge_page(phys, phys, PAGE_PRESENT | PAGE_WRITABLE, allocator)?;
             phys = phys.wrapping_add(SIZE_2MIB);
         }
 
         Ok(())
+    }
+
+    /// Mapeia os primeiros 4 GiB de memória física usando huge pages (2 MiB).
+    ///
+    /// **Nota:** Para sistemas com mais de 4GB de RAM, use `identity_map_range`
+    /// com o endereço físico máximo do memory map para evitar page faults.
+    ///
+    /// Mantido para compatibilidade com código existente.
+    pub fn identity_map_4gib(
+        &mut self,
+        allocator: &mut (impl FrameAllocator + ?Sized),
+    ) -> Result<()> {
+        const SIZE_4GIB: u64 = 0x1_0000_0000;
+        self.identity_map_range(SIZE_4GIB, allocator)
     }
 
     // ---------------------------------------------------------------------
