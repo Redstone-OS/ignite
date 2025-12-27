@@ -3,7 +3,6 @@
 //! Interage com o firmware UEFI para configurar vídeo e acessar framebuffer
 //! nativo.
 
-
 use super::{
     framebuffer::{Framebuffer, FramebufferInfo},
     mode::VideoMode,
@@ -23,6 +22,7 @@ pub const GRAPHICS_OUTPUT_PROTOCOL_GUID: crate::uefi::base::Guid = crate::uefi::
 );
 
 pub struct GopDriver<'a> {
+    #[allow(dead_code)]
     boot_services: &'a BootServices,
     gop_interface: *mut crate::uefi::proto::console::gop::GraphicsOutputProtocol,
 }

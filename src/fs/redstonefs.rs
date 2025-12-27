@@ -12,6 +12,7 @@ use super::{
 use crate::core::error::{BootError, Result};
 
 pub struct RedstoneFileSystem<D: BlockDevice> {
+    #[allow(dead_code)]
     device: D,
 }
 

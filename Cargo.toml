@@ -5,6 +5,18 @@ edition = "2021"
 authors = ["Redstone OS Team"]
 description = "Industrial UEFI Bootloader for Redstone OS"
 
+[lib]
+test = false
+doctest = false
+harness = false
+bench = false
+
+[[bin]]
+name = "ignite"
+path = "src/main.rs"
+test = false
+bench = false
+
 [dependencies]
 # Log leve para bootloader (interface com nosso logger.rs)
 log = "0.4"

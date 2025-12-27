@@ -6,9 +6,9 @@
 use core::ffi::c_void;
 
 use crate::uefi::{
-    Result,
     base::{Char16, Guid, Status},
     table::header::TableHeader,
+    Result,
 };
 
 #[repr(C)]
@@ -41,31 +41,38 @@ pub struct RuntimeServices {
     pub hdr: TableHeader,
 
     // Time Services
-    pub get_time:        extern "efiapi" fn(*mut Time, *mut c_void) -> Status,
-    pub set_time:        extern "efiapi" fn(*mut Time) -> Status,
-    pub get_wakeup_time: extern "efiapi" fn(*mut u8, *mut u8, *mut Time) -> Status,
-    pub set_wakeup_time: extern "efiapi" fn(u8, *mut Time) -> Status,
+    pub get_time:        unsafe extern "efiapi" fn(*mut Time, *mut c_void) -> Status,
+    pub set_time:        unsafe extern "efiapi" fn(*mut Time) -> Status,
+    pub get_wakeup_time: unsafe extern "efiapi" fn(*mut u8, *mut u8, *mut Time) -> Status,
+    pub set_wakeup_time: unsafe extern "efiapi" fn(u8, *mut Time) -> Status,
 
     // Virtual Memory Services
-    pub set_virtual_address_map: extern "efiapi" fn(usize, usize, u32, *mut c_void) -> Status,
-    pub convert_pointer:         extern "efiapi" fn(usize, *mut *mut c_void) -> Status,
+    pub set_virtual_address_map:
+        unsafe extern "efiapi" fn(usize, usize, u32, *mut c_void) -> Status,
+    pub convert_pointer:         unsafe extern "efiapi" fn(usize, *mut *mut c_void) -> Status,
 
     // Variable Services
-    pub get_variable:
-        extern "efiapi" fn(*const Char16, *const Guid, *mut u32, *mut usize, *mut c_void) -> Status,
-    pub get_next_variable_name: extern "efiapi" fn(*mut usize, *mut Char16, *mut Guid) -> Status,
+    pub get_variable: unsafe extern "efiapi" fn(
+        *const Char16,
+        *const Guid,
+        *mut u32,
+        *mut usize,
+        *mut c_void,
+    ) -> Status,
+    pub get_next_variable_name:
+        unsafe extern "efiapi" fn(*mut usize, *mut Char16, *mut Guid) -> Status,
     pub set_variable:
-        extern "efiapi" fn(*const Char16, *const Guid, u32, usize, *mut c_void) -> Status,
+        unsafe extern "efiapi" fn(*const Char16, *const Guid, u32, usize, *mut c_void) -> Status,
 
     // Miscellaneous Services
-    pub get_next_high_monotonic_count: extern "efiapi" fn(*mut u32) -> Status,
-    pub reset_system: extern "efiapi" fn(ResetType, Status, usize, *const c_void) -> !,
+    pub get_next_high_monotonic_count: unsafe extern "efiapi" fn(*mut u32) -> Status,
+    pub reset_system: unsafe extern "efiapi" fn(ResetType, Status, usize, *const c_void) -> !,
 
     // UEFI 2.0 Capsule Services
-    pub update_capsule:             extern "efiapi" fn(*mut *mut c_void, usize, u64) -> Status,
+    pub update_capsule: unsafe extern "efiapi" fn(*mut *mut c_void, usize, u64) -> Status,
     pub query_capsule_capabilities:
-        extern "efiapi" fn(*mut *mut c_void, usize, *mut u64, *mut u32) -> Status,
-    pub query_variable_info:        extern "efiapi" fn(u32, *mut u64, *mut u64, *mut u64) -> Status,
+        unsafe extern "efiapi" fn(*mut *mut c_void, usize, *mut u64, *mut u32) -> Status,
+    pub query_variable_info: unsafe extern "efiapi" fn(u32, *mut u64, *mut u64, *mut u64) -> Status,
 }
 
 impl RuntimeServices {

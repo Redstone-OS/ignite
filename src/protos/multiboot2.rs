@@ -13,9 +13,11 @@ use crate::{
     memory::FrameAllocator,
 };
 
+#[allow(dead_code)]
 const MB2_MAGIC: u32 = 0xE85250D6;
 
 pub struct Multiboot2Protocol<'a> {
+    #[allow(dead_code)]
     allocator: &'a mut dyn FrameAllocator,
 }
 

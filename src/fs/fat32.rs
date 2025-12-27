@@ -36,6 +36,7 @@ struct BiosParameterBlock {
 /// Extended BPB.
 #[repr(C, packed)]
 #[derive(Debug, Copy, Clone)]
+#[allow(dead_code)]
 struct Fat32Ext {
     fat_size_32:        u32,
     ext_flags:          u16,
@@ -52,12 +53,18 @@ struct Fat32Ext {
     fs_type:            [u8; 8],
 }
 
+#[allow(dead_code)]
 pub struct Fat32FileSystem<D: BlockDevice> {
+    #[allow(dead_code)]
     device:              D,
     // Metadados do FS em cache
+    #[allow(dead_code)]
     fat_start_lba:       u64,
+    #[allow(dead_code)]
     data_start_lba:      u64,
+    #[allow(dead_code)]
     sectors_per_cluster: u64,
+    #[allow(dead_code)]
     root_cluster:        u32,
 }
 

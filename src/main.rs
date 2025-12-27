@@ -70,14 +70,13 @@
 
 #![no_std]
 #![no_main]
-#![feature(abi_efiapi)]
 #![feature(alloc_error_handler)] // Habilita o handler de OOM customizado
 
 extern crate alloc;
 
 // Imports da biblioteca Ignite
 use ignite::{
-    config::{BootConfig, Protocol, loader::load_configuration},
+    config::{loader::load_configuration, BootConfig, Protocol},
     core::{
         handoff::FramebufferInfo as HandoffFbInfo, // Alias para evitar colisão
         logging,
@@ -86,7 +85,7 @@ use ignite::{
     memory::{BumpAllocator, PageTableManager, UefiFrameAllocator},
     protos::load_any,
     recovery::Diagnostics,
-    security::{SecurityPolicy, validate_and_measure},
+    security::{validate_and_measure, SecurityPolicy},
     uefi::{self, Handle, SystemTable},
     ui::Menu,
     video,
@@ -448,13 +447,15 @@ fn get_memory_map_key(
     let mut descriptor_size = 0;
     let mut descriptor_version = 0;
 
-    let _ = (bs.get_memory_map_f)(
-        &mut map_size,
-        core::ptr::null_mut(),
-        &mut map_key,
-        &mut descriptor_size,
-        &mut descriptor_version,
-    );
+    let _ = unsafe {
+        (bs.get_memory_map_f)(
+            &mut map_size,
+            core::ptr::null_mut(),
+            &mut map_key,
+            &mut descriptor_size,
+            &mut descriptor_version,
+        )
+    };
 
     // Retorna o mapa de memória e um iterador vazio
     (map_key, core::iter::empty())
@@ -471,13 +472,15 @@ fn capture_memory_map(bs: &ignite::uefi::BootServices) -> (u64, u64) {
     let mut descriptor_version = 0;
 
     // 1. Descobrir tamanho necessário
-    let _ = (bs.get_memory_map_f)(
-        &mut map_size,
-        core::ptr::null_mut(),
-        &mut map_key,
-        &mut descriptor_size,
-        &mut descriptor_version,
-    );
+    let _ = unsafe {
+        (bs.get_memory_map_f)(
+            &mut map_size,
+            core::ptr::null_mut(),
+            &mut map_key,
+            &mut descriptor_size,
+            &mut descriptor_version,
+        )
+    };
 
     // 2. Alocar buffer (com margem de segurança)
     map_size += descriptor_size * 10;
@@ -486,13 +489,15 @@ fn capture_memory_map(bs: &ignite::uefi::BootServices) -> (u64, u64) {
         .expect("Falha ao alocar buffer para memory map");
 
     // 3. Obter memory map real
-    let status = (bs.get_memory_map_f)(
-        &mut map_size,
-        buffer_ptr as *mut ignite::uefi::table::boot::MemoryDescriptor,
-        &mut map_key,
-        &mut descriptor_size,
-        &mut descriptor_version,
-    );
+    let status = unsafe {
+        (bs.get_memory_map_f)(
+            &mut map_size,
+            buffer_ptr as *mut ignite::uefi::table::boot::MemoryDescriptor,
+            &mut map_key,
+            &mut descriptor_size,
+            &mut descriptor_version,
+        )
+    };
 
     if status.is_error() {
         ignite::println!("AVISO: Falha ao capturar memory map!");

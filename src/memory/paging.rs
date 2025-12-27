@@ -62,6 +62,7 @@ const PAGE_ACCESSED: u64 = 1 << 5; // A - Accessed
 const PAGE_DIRTY: u64 = 1 << 6; // D - Dirty (para PT/huge pages)
 const PAGE_HUGE: u64 = 1 << 7; // PS - Page Size (2MiB em PD, 1GiB em PDPT)
 const PAGE_GLOBAL: u64 = 1 << 8; // G - Global (não flush no CR3 reload)
+#[allow(dead_code)]
 const PAGE_PAT: u64 = 1 << 12; // PAT (para huge pages; bit 7 em PT)
 const PAGE_NO_EXEC: u64 = 1 << 63; // NX - No Execute
 
@@ -89,6 +90,7 @@ const PAGE_PAT_4K: u64 = 1 << 7;
 const ADDR_MASK: u64 = 0x000F_FFFF_FFFF_F000;
 
 /// Tamanho de uma huge page (2MiB)
+#[allow(dead_code)]
 const HUGE_PAGE_SIZE: u64 = 2 * 1024 * 1024;
 
 /// Tamanho de uma página normal (4KiB)
@@ -299,7 +301,7 @@ impl PageTableManager {
         }
 
         // Log: huge page será dividida
-        let huge_phys = huge_entry & ADDR_MASK;
+        let _huge_phys = huge_entry & ADDR_MASK;
 
         // Extrair endereço base da huge page (alinhado a 2MiB)
         let huge_phys_base = huge_entry & ADDR_MASK;

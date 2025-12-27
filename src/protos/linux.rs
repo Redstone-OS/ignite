@@ -14,10 +14,12 @@ use crate::{
     memory::FrameAllocator,
 };
 
+#[allow(dead_code)]
 const LINUX_SETUP_HEADER_OFFSET: usize = 0x1F1;
 const LINUX_MAGIC: u32 = 0x53726448; // "HdrS"
 
 #[repr(C, packed)]
+#[allow(dead_code)]
 struct LinuxSetupHeader {
     setup_sects: u8,
     root_flags:  u16,
@@ -32,6 +34,7 @@ struct LinuxSetupHeader {
 }
 
 pub struct LinuxProtocol<'a> {
+    #[allow(dead_code)]
     allocator: &'a mut dyn FrameAllocator,
 }
 

@@ -39,7 +39,6 @@
 //! - [ ] **TODO: (Test)** Criar target de teste em QEMU/OVMF automatizado.
 
 #![no_std]
-#![feature(abi_efiapi)]
 // Habilita recursos experimentais necessários para certas operações de baixo nível
 #![feature(alloc_error_handler)]
 

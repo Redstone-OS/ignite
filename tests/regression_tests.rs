@@ -7,8 +7,6 @@
 
 extern crate alloc;
 
-use alloc::vec::Vec;
-
 /// Regressão: Overflow ao calcular número de páginas
 /// Bug: Integer overflow quando size era muito grande
 #[test]

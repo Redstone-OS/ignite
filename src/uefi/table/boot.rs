@@ -9,9 +9,9 @@
 use core::ffi::c_void;
 
 use crate::uefi::{
-    Result,
     base::{Char16, Event, Guid, Handle, Status},
     table::header::TableHeader,
+    Result,
 };
 
 // --- Tipos de Enumeração ---
@@ -94,42 +94,45 @@ pub struct BootServices {
     pub hdr: TableHeader,
 
     // Task Priority Services (TPL)
-    pub raise_tpl_f:   extern "efiapi" fn(usize) -> usize,
-    pub restore_tpl_f: extern "efiapi" fn(usize),
+    pub raise_tpl_f:   unsafe extern "efiapi" fn(usize) -> usize,
+    pub restore_tpl_f: unsafe extern "efiapi" fn(usize),
 
     // Memory Services
-    pub allocate_pages_f: extern "efiapi" fn(AllocateType, MemoryType, usize, *mut u64) -> Status,
-    pub free_pages_f:     extern "efiapi" fn(u64, usize) -> Status,
-    pub get_memory_map_f: extern "efiapi" fn(
+    pub allocate_pages_f:
+        unsafe extern "efiapi" fn(AllocateType, MemoryType, usize, *mut u64) -> Status,
+    pub free_pages_f:     unsafe extern "efiapi" fn(u64, usize) -> Status,
+    pub get_memory_map_f: unsafe extern "efiapi" fn(
         *mut usize,
         *mut MemoryDescriptor,
         *mut usize,
         *mut usize,
         *mut u32,
     ) -> Status,
-    pub allocate_pool_f:  extern "efiapi" fn(MemoryType, usize, *mut *mut u8) -> Status,
-    pub free_pool_f:      extern "efiapi" fn(*mut u8) -> Status,
+    pub allocate_pool_f:  unsafe extern "efiapi" fn(MemoryType, usize, *mut *mut u8) -> Status,
+    pub free_pool_f:      unsafe extern "efiapi" fn(*mut u8) -> Status,
 
     // Event & Timer Services
-    pub create_event_f:   extern "efiapi" fn(u32, usize, usize, *mut c_void, *mut Event) -> Status,
-    pub set_timer_f:      extern "efiapi" fn(Event, TimerDelay, u64) -> Status,
-    pub wait_for_event_f: extern "efiapi" fn(usize, *mut Event, *mut usize) -> Status,
-    pub signal_event_f:   extern "efiapi" fn(Event) -> Status,
-    pub close_event_f:    extern "efiapi" fn(Event) -> Status,
-    pub check_event_f:    extern "efiapi" fn(Event) -> Status,
+    pub create_event_f:
+        unsafe extern "efiapi" fn(u32, usize, usize, *mut c_void, *mut Event) -> Status,
+    pub set_timer_f:      unsafe extern "efiapi" fn(Event, TimerDelay, u64) -> Status,
+    pub wait_for_event_f: unsafe extern "efiapi" fn(usize, *mut Event, *mut usize) -> Status,
+    pub signal_event_f:   unsafe extern "efiapi" fn(Event) -> Status,
+    pub close_event_f:    unsafe extern "efiapi" fn(Event) -> Status,
+    pub check_event_f:    unsafe extern "efiapi" fn(Event) -> Status,
 
     // Protocol Handler Services
     pub install_protocol_interface_f:
-        extern "efiapi" fn(*mut Handle, *const Guid, InterfaceType, *mut c_void) -> Status,
+        unsafe extern "efiapi" fn(*mut Handle, *const Guid, InterfaceType, *mut c_void) -> Status,
     pub reinstall_protocol_interface_f:
-        extern "efiapi" fn(Handle, *const Guid, *mut c_void, *mut c_void) -> Status,
+        unsafe extern "efiapi" fn(Handle, *const Guid, *mut c_void, *mut c_void) -> Status,
     pub uninstall_protocol_interface_f:
-        extern "efiapi" fn(Handle, *const Guid, *mut c_void) -> Status,
-    pub handle_protocol_f: extern "efiapi" fn(Handle, *const Guid, *mut *mut c_void) -> Status,
+        unsafe extern "efiapi" fn(Handle, *const Guid, *mut c_void) -> Status,
+    pub handle_protocol_f:
+        unsafe extern "efiapi" fn(Handle, *const Guid, *mut *mut c_void) -> Status,
     pub reserved: *mut c_void,
     pub register_protocol_notify_f:
-        extern "efiapi" fn(*const Guid, Event, *mut *mut c_void) -> Status,
-    pub locate_handle_f: extern "efiapi" fn(
+        unsafe extern "efiapi" fn(*const Guid, Event, *mut *mut c_void) -> Status,
+    pub locate_handle_f: unsafe extern "efiapi" fn(
         LocateSearchType,
         *const Guid,
         *mut c_void,
@@ -137,44 +140,59 @@ pub struct BootServices {
         *mut Handle,
     ) -> Status,
     pub locate_device_path_f:
-        extern "efiapi" fn(*const Guid, *mut *mut c_void, *mut Handle) -> Status,
-    pub install_configuration_table_f: extern "efiapi" fn(*const Guid, *mut c_void) -> Status,
+        unsafe extern "efiapi" fn(*const Guid, *mut *mut c_void, *mut Handle) -> Status,
+    pub install_configuration_table_f:
+        unsafe extern "efiapi" fn(*const Guid, *mut c_void) -> Status,
 
     // Image Services
-    pub load_image_f:
-        extern "efiapi" fn(u8, Handle, *mut c_void, *mut c_void, usize, *mut Handle) -> Status,
-    pub start_image_f:        extern "efiapi" fn(Handle, *mut usize, *mut *mut u16) -> Status,
-    pub exit_f:               extern "efiapi" fn(Handle, Status, usize, *mut u16) -> Status,
-    pub unload_image_f:       extern "efiapi" fn(Handle) -> Status,
-    pub exit_boot_services_f: extern "efiapi" fn(Handle, usize) -> Status,
+    pub load_image_f: unsafe extern "efiapi" fn(
+        u8,
+        Handle,
+        *mut c_void,
+        *mut c_void,
+        usize,
+        *mut Handle,
+    ) -> Status,
+    pub start_image_f: unsafe extern "efiapi" fn(Handle, *mut usize, *mut *mut u16) -> Status,
+    pub exit_f:               unsafe extern "efiapi" fn(Handle, Status, usize, *mut u16) -> Status,
+    pub unload_image_f:       unsafe extern "efiapi" fn(Handle) -> Status,
+    pub exit_boot_services_f: unsafe extern "efiapi" fn(Handle, usize) -> Status,
 
     // Miscellaneous Services
-    pub get_next_monotonic_count_f: extern "efiapi" fn(*mut u64) -> Status,
-    pub stall_f:                    extern "efiapi" fn(usize) -> Status,
-    pub set_watchdog_timer_f:       extern "efiapi" fn(usize, u64, usize, *const Char16) -> Status,
+    pub get_next_monotonic_count_f: unsafe extern "efiapi" fn(*mut u64) -> Status,
+    pub stall_f:                    unsafe extern "efiapi" fn(usize) -> Status,
+    pub set_watchdog_timer_f: unsafe extern "efiapi" fn(usize, u64, usize, *const Char16) -> Status,
 
     // Driver Support Services
-    pub connect_controller_f:    extern "efiapi" fn(Handle, *mut Handle, *mut c_void, u8) -> Status,
-    pub disconnect_controller_f: extern "efiapi" fn(Handle, Handle, Handle) -> Status,
+    pub connect_controller_f:
+        unsafe extern "efiapi" fn(Handle, *mut Handle, *mut c_void, u8) -> Status,
+    pub disconnect_controller_f: unsafe extern "efiapi" fn(Handle, Handle, Handle) -> Status,
 
     // Open and Close Protocol Services
-    pub open_protocol_f:
-        extern "efiapi" fn(Handle, *const Guid, *mut *mut c_void, Handle, Handle, u32) -> Status,
-    pub close_protocol_f: extern "efiapi" fn(Handle, *const Guid, Handle, Handle) -> Status,
+    pub open_protocol_f: unsafe extern "efiapi" fn(
+        Handle,
+        *const Guid,
+        *mut *mut c_void,
+        Handle,
+        Handle,
+        u32,
+    ) -> Status,
+    pub close_protocol_f: unsafe extern "efiapi" fn(Handle, *const Guid, Handle, Handle) -> Status,
     pub open_protocol_information_f:
-        extern "efiapi" fn(Handle, *const Guid, *mut *mut c_void, *mut usize) -> Status,
+        unsafe extern "efiapi" fn(Handle, *const Guid, *mut *mut c_void, *mut usize) -> Status,
 
     // Library Services
     pub protocols_per_handle_f:
-        extern "efiapi" fn(Handle, *mut *mut *mut Guid, *mut usize) -> Status,
-    pub locate_handle_buffer_f: extern "efiapi" fn(
+        unsafe extern "efiapi" fn(Handle, *mut *mut *mut Guid, *mut usize) -> Status,
+    pub locate_handle_buffer_f: unsafe extern "efiapi" fn(
         LocateSearchType,
         *const Guid,
         *mut c_void,
         *mut usize,
         *mut *mut Handle,
     ) -> Status,
-    pub locate_protocol_f: extern "efiapi" fn(*const Guid, *mut c_void, *mut *mut c_void) -> Status,
+    pub locate_protocol_f:
+        unsafe extern "efiapi" fn(*const Guid, *mut c_void, *mut *mut c_void) -> Status,
 }
 
 // --- Métodos Seguros (Rust API) ---

@@ -6,8 +6,8 @@
 use core::ffi::c_void;
 
 use crate::uefi::{
-    Result,
     base::{Char16, Guid, Status},
+    Result,
 };
 
 pub const FILE_MODE_READ: u64 = 0x0000000000000001;
@@ -24,16 +24,18 @@ pub const FILE_INFO_GUID: Guid = Guid::new(
 #[repr(C)]
 pub struct FileProtocol {
     pub revision:     u64,
-    pub open: extern "efiapi" fn(*mut Self, *mut *mut Self, *const Char16, u64, u64) -> Status,
-    pub close:        extern "efiapi" fn(*mut Self) -> Status,
-    pub delete:       extern "efiapi" fn(*mut Self) -> Status,
-    pub read:         extern "efiapi" fn(*mut Self, *mut usize, *mut c_void) -> Status,
-    pub write:        extern "efiapi" fn(*mut Self, *mut usize, *const c_void) -> Status,
-    pub get_position: extern "efiapi" fn(*mut Self, *mut u64) -> Status,
-    pub set_position: extern "efiapi" fn(*mut Self, u64) -> Status,
-    pub get_info:     extern "efiapi" fn(*mut Self, *const Guid, *mut usize, *mut c_void) -> Status,
-    pub set_info:     extern "efiapi" fn(*mut Self, *const Guid, usize, *const c_void) -> Status,
-    pub flush:        extern "efiapi" fn(*mut Self) -> Status,
+    pub open:
+        unsafe extern "efiapi" fn(*mut Self, *mut *mut Self, *const Char16, u64, u64) -> Status,
+    pub close:        unsafe extern "efiapi" fn(*mut Self) -> Status,
+    pub delete:       unsafe extern "efiapi" fn(*mut Self) -> Status,
+    pub read:         unsafe extern "efiapi" fn(*mut Self, *mut usize, *mut c_void) -> Status,
+    pub write:        unsafe extern "efiapi" fn(*mut Self, *mut usize, *const c_void) -> Status,
+    pub get_position: unsafe extern "efiapi" fn(*mut Self, *mut u64) -> Status,
+    pub set_position: unsafe extern "efiapi" fn(*mut Self, u64) -> Status,
+    pub get_info:
+        unsafe extern "efiapi" fn(*mut Self, *const Guid, *mut usize, *mut c_void) -> Status,
+    pub set_info: unsafe extern "efiapi" fn(*mut Self, *const Guid, usize, *const c_void) -> Status,
+    pub flush:        unsafe extern "efiapi" fn(*mut Self) -> Status,
 }
 
 impl FileProtocol {
