@@ -686,6 +686,13 @@ unsafe extern "C" fn jump_to_kernel_redstone(
     // Endereço fixo do kernel Forge (convenção Redstone OS)
     const REDSTONE_KERNEL_ENTRY: u64 = 0xffffffff80000000;
 
+    ignite::println!(
+        "[DEBUG] jump_to_kernel_redstone: Target={:#x}, CR3={:#x}, Stack={:#x}",
+        REDSTONE_KERNEL_ENTRY,
+        cr3,
+        stack
+    );
+
     core::arch::asm!(
         "cli",
 
