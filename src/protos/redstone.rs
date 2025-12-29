@@ -343,7 +343,20 @@ impl<'a> BootProtocol for RedstoneProtocol<'a> {
         }
 
         // ---------------------------
-        // 7) Construir KernelLaunchInfo e retornar
+        // 7) Alocar stack para o kernel
+        // ---------------------------
+        //
+        // O kernel precisa de um stack válido logo na entrada.
+        // Alocamos 64KB (16 frames) que é suficiente para early boot.
+        const KERNEL_STACK_PAGES: usize = 16; // 64 KB
+        const PAGE_SIZE: u64 = 4096;
+
+        let stack_bottom = self.allocator.allocate_frame(KERNEL_STACK_PAGES)?;
+        // O stack cresce para baixo, então o stack pointer inicial é no TOPO do buffer
+        let stack_top = stack_bottom + (KERNEL_STACK_PAGES as u64 * PAGE_SIZE);
+
+        // ---------------------------
+        // 8) Construir KernelLaunchInfo e retornar
         // ---------------------------
         //
         // `use_fixed_redstone_entry = true` indica que o protocolo espera executar um
@@ -352,7 +365,7 @@ impl<'a> BootProtocol for RedstoneProtocol<'a> {
         Ok(KernelLaunchInfo {
             entry_point: loaded_kernel.entry_point,
             use_fixed_redstone_entry: true,
-            stack_pointer: None,
+            stack_pointer: Some(stack_top),
             rdi: boot_info_phys,
             rsi: 0,
             rdx: 0,
