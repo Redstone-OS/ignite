@@ -395,6 +395,25 @@ pub extern "efiapi" fn efi_main(image_handle: Handle, system_table: *mut SystemT
 
     ignite::println!("Saindo dos servicos de boot UEFI...");
 
+    // LIMPAR TELA: Preencher framebuffer com preto antes do salto
+    // Isso garante que qualquer desenho feito pelo kernel seja visível
+    unsafe {
+        let fb_ptr = handoff_fb_info.addr as *mut u32;
+        // stride está em PIXELS (pixels_per_scan_line), não bytes
+        let stride_pixels = handoff_fb_info.stride as usize;
+        let height = handoff_fb_info.height as usize;
+
+        // Limpar linha por linha usando stride em pixels
+        for y in 0..height {
+            let row_ptr = fb_ptr.add(y * stride_pixels);
+            for x in 0..stride_pixels {
+                row_ptr.add(x).write_volatile(0x000000); // Preto
+            }
+        }
+    }
+
+    ignite::println!("Tela limpa.");
+
     // 11. Exit Boot Services
     let (map_key, _iter) = get_memory_map_key(bs);
     if bs
