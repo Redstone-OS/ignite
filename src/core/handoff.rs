@@ -41,8 +41,8 @@
 pub const BOOT_INFO_MAGIC: u64 = 0x524544_53544F4E45;
 
 /// Versão atual da estrutura de BootInfo. Incrementar se mudar o layout.
-/// v2: Adicionado _padding e cr3_phys para alinhamento correto com kernel.
-pub const BOOT_INFO_VERSION: u32 = 2;
+/// v3: Adicionado hhdm_offset e hhdm_size para o novo subsistema de memoria.
+pub const BOOT_INFO_VERSION: u32 = 3;
 
 /// Informações completas de Boot entregues ao Kernel.
 /// DEVE corresponder EXATAMENTE a forge/src/core/handoff.rs::BootInfo
@@ -86,6 +86,13 @@ pub struct BootInfo {
     /// O kernel herda esta hierarquia de page tables e NÃO deve liberar esses
     /// frames. IMPORTANTE: Este é o endereço físico real, não virtual!
     pub cr3_phys: u64,
+
+    /// Offset usado para o Higher Half Direct Map (HHDM).
+    /// Normalmente 0xFFFF_8000_0000_0000.
+    pub hhdm_offset: u64,
+
+    /// Tamanho da RAM mapeada no HHDM (em bytes).
+    pub hhdm_size: u64,
 }
 
 /// Detalhes sobre o Framebuffer Gráfico.

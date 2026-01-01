@@ -162,10 +162,6 @@ impl PageTableManager {
 
     /// Mapeia `count` páginas (4KiB) começando em `phys_addr` onde virtual ==
     /// físico.
-    ///
-    /// Use para criar mapeamentos finos (4KiB). Para grandes faixas (ex.:
-    /// 0..4GiB) prefira `identity_map_4gib` que usa huge pages de 2MiB por
-    /// performance.
     pub fn identity_map(
         &mut self,
         phys_addr: u64,
@@ -181,47 +177,73 @@ impl PageTableManager {
 
     /// Mapeia memória física de 0 até `max_phys_addr` usando huge pages (2
     /// MiB).
-    ///
-    /// **Motivação:** o bootloader e o early-kernel frequentemente executam em
-    /// endereços físicos que podem estar em qualquer região da RAM. Ao trocar
-    /// CR3 precisamos garantir que esses endereços permaneçam acessíveis.
-    /// Usar huge pages reduz TLB pressure e diminui a quantidade de page
-    /// tables alocadas.
-    ///
-    /// **Uso:** Para sistemas com mais de 4GB de RAM, passe o endereço físico
-    /// máximo + margem para garantir que toda a memória esteja mapeada.
     pub fn identity_map_range(
         &mut self,
         max_phys_addr: u64,
         allocator: &mut (impl FrameAllocator + ?Sized),
     ) -> Result<()> {
         const SIZE_2MIB: u64 = 0x20_0000;
-
-        // Arredondar para cima para o próximo boundary de 2MiB
         let aligned_max = (max_phys_addr + SIZE_2MIB - 1) & !(SIZE_2MIB - 1);
 
-        // Usar huge pages (2MiB) para performance.
         let mut phys = 0u64;
         while phys < aligned_max {
             self.map_huge_page(phys, phys, PAGE_PRESENT | PAGE_WRITABLE, allocator)?;
             phys = phys.wrapping_add(SIZE_2MIB);
         }
-
         Ok(())
     }
 
-    /// Mapeia os primeiros 4 GiB de memória física usando huge pages (2 MiB).
-    ///
-    /// **Nota:** Para sistemas com mais de 4GB de RAM, use `identity_map_range`
-    /// com o endereço físico máximo do memory map para evitar page faults.
-    ///
-    /// Mantido para compatibilidade com código existente.
     pub fn identity_map_4gib(
         &mut self,
         allocator: &mut (impl FrameAllocator + ?Sized),
     ) -> Result<()> {
         const SIZE_4GIB: u64 = 0x1_0000_0000;
         self.identity_map_range(SIZE_4GIB, allocator)
+    }
+
+    /// Mapeia toda a RAM disponível em uma região de Higher Half Direct Map
+    /// (HHDM).
+    ///
+    /// O offset costuma ser 0xFFFF_8000_0000_0000. Isso permite que o kernel
+    /// acesse qualquer endereço físico via `HHDM_BASE + phys`.
+    pub fn map_hhdm(
+        &mut self,
+        max_phys_addr: u64,
+        hhdm_offset: u64,
+        allocator: &mut (impl FrameAllocator + ?Sized),
+    ) -> Result<()> {
+        const SIZE_2MIB: u64 = 0x20_0000;
+        let aligned_max = (max_phys_addr + SIZE_2MIB - 1) & !(SIZE_2MIB - 1);
+
+        let mut phys = 0u64;
+        while phys < aligned_max {
+            let virt = hhdm_offset + phys;
+            self.map_huge_page(phys, virt, PAGE_PRESENT | PAGE_WRITABLE, allocator)?;
+            phys = phys.wrapping_add(SIZE_2MIB);
+        }
+
+        Ok(())
+    }
+
+    /// Mapeia uma região genérica de memória física para virtual.
+    ///
+    /// - `phys` e `virt` devem estar alinhados a 4 KiB.
+    /// - `len` é o tamanho total em bytes (será arredondado para cima).
+    pub fn map_region(
+        &mut self,
+        phys: u64,
+        virt: u64,
+        len: usize,
+        flags: u64,
+        allocator: &mut (impl FrameAllocator + ?Sized),
+    ) -> Result<()> {
+        let pages = (len + PAGE_SIZE as usize - 1) / PAGE_SIZE as usize;
+        for i in 0..pages {
+            let p = phys + (i as u64 * PAGE_SIZE);
+            let v = virt + (i as u64 * PAGE_SIZE);
+            self.map_page(p, v, flags, allocator)?;
+        }
+        Ok(())
     }
 
     // ---------------------------------------------------------------------

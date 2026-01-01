@@ -242,6 +242,18 @@ impl<'a> BootProtocol for RedstoneProtocol<'a> {
             .expect("Falha ao criar identity map");
 
         // ---------------------------
+        // 1.1) Mapear Higher Half Direct Map (HHDM)
+        // ---------------------------
+        //
+        // **Novo no Subprocesso de Memoria:** Mapeamos toda a RAM fisica em
+        // 0xFFFF_8000_0000_0000. Isso permite que o kernel remova o identity map
+        // mais tarde e tenha isolamento total.
+        const HHDM_BASE: u64 = 0xFFFF_8000_0000_0000;
+        self.page_table
+            .map_hhdm(map_limit, HHDM_BASE, self.allocator)
+            .expect("Falha ao criar HHDM map");
+
+        // ---------------------------
         // 2) Carregar segmentos ELF do kernel
         // ---------------------------
         //
@@ -327,6 +339,9 @@ impl<'a> BootProtocol for RedstoneProtocol<'a> {
             // Endereço FÍSICO da PML4 (CR3) - o kernel herda este mapeamento.
             // IMPORTANTE: Endereço físico real, não virtual!
             cr3_phys: self.page_table.pml4_addr(),
+
+            hhdm_offset: HHDM_BASE,
+            hhdm_size:   map_limit,
         };
 
         // ---------------------------
