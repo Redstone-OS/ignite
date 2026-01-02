@@ -79,7 +79,7 @@ pub fn load_any(
     // 1. Tentar Protocolo Nativo (Redstone/ELF)
     let mut redstone = redstone::RedstoneProtocol::new(allocator, page_table);
     if redstone.identify(kernel_file) {
-        crate::println!("\u{001b}[92m\u{001b}[1m[OK]\u{001b}[0m Detectado Kernel Redstone/ELF.");
+        crate::println!("[OK] Detectado Kernel Redstone/ELF.");
         return redstone.load(
             kernel_file,
             cmdline,

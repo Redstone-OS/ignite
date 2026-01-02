@@ -5,7 +5,7 @@
 
 use crate::{
     config::Entry,
-    fs::{FileSystem, loader::FileLoader},
+    fs::{loader::FileLoader, FileSystem},
 };
 
 /// Resultado do diagnóstico.
@@ -33,7 +33,7 @@ impl Diagnostics {
             crate::println!("FALHA: Kernel '{}' não encontrado.", entry.path);
             return HealthStatus::Critical("Arquivo do Kernel ausente");
         }
-        crate::println!("[92m[1m[OK][0m Kernel encontrado.");
+        crate::println!("[OK] Kernel encontrado.");
 
         // 2. Verificar Módulos (Aviso)
         for module in &entry.modules {
