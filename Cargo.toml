@@ -44,12 +44,26 @@ lib_allocator = []
 
 # --- Perfis de Compilação (CRÍTICO PARA BOOTLOADER) ---
 
-[profile.dev]
-panic = "abort" # Sem unwinding (diminui tamanho, evita símbolos externos)
-
 [profile.release]
 panic = "abort"
-lto = true        # Link Time Optimization (binário menor e mais rápido)
-codegen-units = 1 # Melhor otimização ao custo de tempo de compilação
-opt-level = "z"   # Otimizar para tamanho (preferível em bootloaders EFI)
-strip = true      # Remove símbolos de debug do binário final
+opt-level = 2
+lto = false
+codegen-units = 1
+debug = 2
+strip = "none"
+debug-assertions = true
+overflow-checks = true
+incremental = false
+
+
+[profile.opt-release]
+inherits = "release"
+opt-level = 3
+lto = "thin"
+codegen-units = 1
+panic = "abort"
+debug = 0
+strip = "symbols"
+debug-assertions = false
+overflow-checks = false
+incremental = false
