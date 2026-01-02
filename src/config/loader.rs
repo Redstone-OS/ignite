@@ -5,10 +5,10 @@
 use super::{parser::Parser, types::BootConfig};
 use crate::{
     core::error::Result,
-    fs::{FileSystem, read_to_string},
+    fs::{read_to_string, FileSystem},
 };
 
-const CONFIG_FILENAMES: &[&str] = &["ignite.cfg", "boot/ignite.cfg"];
+const CONFIG_FILENAMES: &[&str] = &["EFI/BOOT/ignite.cfg", "boot/ignite.cfg"];
 
 /// Tenta carregar a configuração. Retorna `BootConfig::recovery()` se falhar.
 pub fn load_configuration(fs: &mut dyn FileSystem) -> Result<BootConfig> {
