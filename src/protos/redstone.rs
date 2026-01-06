@@ -325,8 +325,8 @@ impl<'a> BootProtocol for RedstoneProtocol<'a> {
             memory_map_addr: memory_map_buffer.0,
             memory_map_len:  memory_map_buffer.1,
 
-            // ACPI RSDP — preenchido futuramente.
-            rsdp_addr: 0,
+            // ACPI RSDP — obtido das Configuration Tables da UEFI
+            rsdp_addr: crate::hardware::acpi::AcpiManager::get_rsdp_address().unwrap_or(0),
 
             // Informações fundamentais do kernel carregado.
             kernel_phys_addr: loaded_kernel.base_address,

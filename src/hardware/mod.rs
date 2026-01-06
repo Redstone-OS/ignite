@@ -4,6 +4,7 @@
 //! Serve como a ponte entre o sistema de arquivos/core e a
 //! arquitetura/firmware.
 
+pub mod acpi;
 pub mod io;
 pub mod serial;
 pub mod storage;
